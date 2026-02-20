@@ -1,0 +1,141 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Photzia</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">◼︎</span>
+      <strong>Photzia</strong>
+      <span class="muted">beta</span>
+    </div>
+
+    <div class="topbar-actions">
+      <button id="btnNewLayer" class="btn">+ Layer</button>
+      <button id="btnExport" class="btn">Export PNG</button>
+
+      <div class="sep"></div>
+
+      <label class="row">
+        <span class="muted">Zoom</span>
+        <input id="zoom" type="range" min="25" max="400" value="100" />
+        <span id="zoomLabel" class="pill">100%</span>
+      </label>
+
+      <div class="sep"></div>
+
+      <button id="btnTheme" class="btn">Tema</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="panel left">
+      <h3>Ferramentas</h3>
+
+      <div class="toolgrid" id="toolgrid">
+        <button class="tool active" data-tool="brush" title="Pincel (B)">🖌️</button>
+        <button class="tool" data-tool="eraser" title="Borracha (E)">🧽</button>
+        <button class="tool" data-tool="move" title="Mover (V)">🧲</button>
+      </div>
+
+      <div class="section">
+        <h4>Brush</h4>
+        <label class="row">
+          <span class="muted">Tamanho</span>
+          <input id="size" type="range" min="1" max="80" value="12" />
+          <span id="sizeLabel" class="pill">12</span>
+        </label>
+
+        <label class="row">
+          <span class="muted">Cor</span>
+          <input id="color" type="color" value="#ffffff" />
+        </label>
+
+        <label class="row">
+          <span class="muted">Opacidade</span>
+          <input id="opacity" type="range" min="1" max="100" value="100" />
+          <span id="opacityLabel" class="pill">100%</span>
+        </label>
+      </div>
+
+      <div class="section">
+        <h4>Atalhos</h4>
+        <div class="kbdlist muted">
+          <div><span class="kbd">B</span> pincel</div>
+          <div><span class="kbd">E</span> borracha</div>
+          <div><span class="kbd">V</span> mover</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> desfazer (em breve)</div>
+        </div>
+      </div>
+    </aside>
+
+    <section class="stage-wrap">
+      <div class="stage" id="stage">
+        <canvas id="view" width="1280" height="720"></canvas>
+      </div>
+    </section>
+
+    <aside class="panel right">
+      <h3>Camadas</h3>
+      <div class="layers" id="layers"></div>
+    </aside>
+  </main>
+
+  <!-- Modal de Tema -->
+  <div class="modal-backdrop" id="themeModalBackdrop" hidden></div>
+  <div class="modal" id="themeModal" hidden>
+    <div class="modal-header">
+      <strong>Tema do Photzia</strong>
+      <button class="btn ghost" id="btnCloseTheme">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <p class="muted">Tudo aqui vira <code>CSS variables</code>. Você pode salvar presets.</p>
+
+      <div class="themegrid">
+        <label>
+          <span>Fundo</span>
+          <input type="color" id="t_bg" />
+        </label>
+        <label>
+          <span>Painéis</span>
+          <input type="color" id="t_panel" />
+        </label>
+        <label>
+          <span>Texto</span>
+          <input type="color" id="t_text" />
+        </label>
+        <label>
+          <span>Destaque</span>
+          <input type="color" id="t_accent" />
+        </label>
+        <label>
+          <span>Borda</span>
+          <input type="color" id="t_border" />
+        </label>
+        <label>
+          <span>Canvas</span>
+          <input type="color" id="t_canvas" />
+        </label>
+      </div>
+
+      <div class="row gap">
+        <input id="themeName" class="input" placeholder="nome do tema (ex: neon)" />
+        <button id="btnSaveTheme" class="btn">Salvar</button>
+        <button id="btnResetTheme" class="btn ghost">Reset</button>
+      </div>
+
+      <div class="section">
+        <h4>Presets salvos</h4>
+        <div id="themePresets" class="presetlist"></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
