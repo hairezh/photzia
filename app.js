@@ -1,4 +1,5 @@
-// Photzia v5 — Sidebar Menus (Photopea-ish pattern) + Flyout actions + v4 editor intact.
+// Photzia v6 — new default theme + png bg default + export types (png/jpeg/webp) + nicer layout wiring.
+// Mantém: layers, selection transform rotation, marching ants, themes.
 
 const view = document.getElementById("view");
 const vctx = view.getContext("2d");
@@ -26,6 +27,11 @@ const opacityLabel = document.getElementById("opacityLabel");
 
 const zoom = document.getElementById("zoom");
 const zoomLabel = document.getElementById("zoomLabel");
+
+// Export options
+const exportType = document.getElementById("exportType");
+const exportQuality = document.getElementById("exportQuality");
+const exportQualityLabel = document.getElementById("exportQualityLabel");
 
 // Active layer props
 const noActiveLayer = document.getElementById("noActiveLayer");
@@ -85,7 +91,7 @@ const t_iconUrl = document.getElementById("t_iconUrl");
 const t_iconUpload = document.getElementById("t_iconUpload");
 const btnIconReset = document.getElementById("btnIconReset");
 
-// NEW: menu sidebar + flyout
+// Menu sidebar + flyout
 const menubar = document.getElementById("menubar");
 const menuFlyout = document.getElementById("menuFlyout");
 const menuTitle = document.getElementById("menuTitle");
@@ -94,33 +100,36 @@ const btnCloseFlyout = document.getElementById("btnCloseFlyout");
 
 // Toast
 const toastEl = document.getElementById("toast");
-
 function toast(msg){
   toastEl.textContent = msg;
   toastEl.hidden = false;
   clearTimeout(toastEl.__t);
-  toastEl.__t = setTimeout(() => (toastEl.hidden = true), 1800);
+  toastEl.__t = setTimeout(() => (toastEl.hidden = true), 1700);
 }
 
 const DEFAULT_ICON =
   "https://i.pinimg.com/1200x/46/22/a5/4622a5352569a33762c60f091485936b.jpg";
 
+// Fundo default PNG (dataURL)
+const DEFAULT_BG_PNG =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2Z0n0AAAAASUVORK5CYII=';
+
 const DEFAULT_THEME = {
-  "--bg": "#0b0f14",
-  "--panel": "#111827",
-  "--panel2": "#0f172a",
-  "--text": "#e5e7eb",
-  "--muted": "#94a3b8",
-  "--accent": "#7c3aed",
-  "--border": "#243041",
-  "--canvas": "#0a0a0a",
+  "--bg": "#07131a",
+  "--panel": "#0b1c26",
+  "--panel2": "#0a1720",
+  "--text": "#e7f6ff",
+  "--muted": "#8fb2c6",
+  "--accent": "#00e5ff",
+  "--border": "#123346",
+  "--canvas": "#070a0d",
 
-  "--ui-blur": "10px",
-  "--panel-alpha": "0.92",
-  "--topbar-alpha": "0.78",
+  "--ui-blur": "14px",
+  "--panel-alpha": "0.88",
+  "--topbar-alpha": "0.74",
 
-  "--bg-image": "none",
-  "--bg-image-alpha": "0.35",
+  "--bg-image": `url("${DEFAULT_BG_PNG}")`,
+  "--bg-image-alpha": "0.16",
   "--bg-image-fit": "cover",
   "--bg-image-pos": "center center",
 
@@ -132,11 +141,9 @@ function applyVars(vars){
     if (k.startsWith("--")) document.documentElement.style.setProperty(k, v);
   }
 }
-
 function getCss(varName){
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
-
 function cssToHex(c){
   if (!c) return "#000000";
   if (c.startsWith("#")) return c;
@@ -151,7 +158,6 @@ function setIcon(url){
   appIcon.src = url;
   localStorage.setItem("photzia_icon_url", url);
 }
-
 function getIcon(){
   return localStorage.getItem("photzia_icon_url") || DEFAULT_ICON;
 }
@@ -170,11 +176,11 @@ function applyThemeObj(themeObj){
   t_blur.value = String(blurPx);
   t_blurLabel.textContent = `${blurPx}px`;
 
-  const pA = Math.round((parseFloat(getCss("--panel-alpha")) || 0.92) * 100);
+  const pA = Math.round((parseFloat(getCss("--panel-alpha")) || 0.88) * 100);
   t_panelAlpha.value = String(pA);
   t_panelAlphaLabel.textContent = `${pA}%`;
 
-  const tA = Math.round((parseFloat(getCss("--topbar-alpha")) || 0.78) * 100);
+  const tA = Math.round((parseFloat(getCss("--topbar-alpha")) || 0.74) * 100);
   t_topbarAlpha.value = String(tA);
   t_topbarAlphaLabel.textContent = `${tA}%`;
 
@@ -193,8 +199,8 @@ function applyThemeObj(themeObj){
 
 function currentThemeObj(){
   const blur = `${parseInt(t_blur.value, 10) || 0}px`;
-  const pA = (parseInt(t_panelAlpha.value, 10) || 92) / 100;
-  const tA = (parseInt(t_topbarAlpha.value, 10) || 78) / 100;
+  const pA = (parseInt(t_panelAlpha.value, 10) || 88) / 100;
+  const tA = (parseInt(t_topbarAlpha.value, 10) || 74) / 100;
 
   const bgAlpha = (parseInt(t_bgImageAlpha.value, 10) || 0) / 100;
   const fit = t_bgImageFit.value || "cover";
@@ -249,7 +255,6 @@ function openTheme(){
   });
   renderPresets();
 }
-
 function closeTheme(){
   themeModal.hidden = true;
   themeModalBackdrop.hidden = true;
@@ -265,7 +270,6 @@ function getPresets(){
 function setPresets(p){
   localStorage.setItem("photzia_theme_presets", JSON.stringify(p));
 }
-
 function renderPresets(){
   const presets = getPresets();
   themePresetsEl.innerHTML = "";
@@ -376,18 +380,33 @@ btnResetTheme.addEventListener("click", () => {
   applyThemeObj(DEFAULT_THEME);
   setIcon(DEFAULT_ICON);
   renderPresets();
+  toast("Tema default restaurado.");
 });
 
-// ===== Sidebar Menus =====
+// Export UI
+function syncQualityUI(){
+  const q = parseInt(exportQuality.value, 10);
+  exportQualityLabel.textContent = `${q}%`;
+  const t = exportType.value;
+  exportQuality.disabled = (t === "png");
+  exportQuality.style.opacity = exportQuality.disabled ? 0.5 : 1;
+}
+exportType.addEventListener("change", syncQualityUI);
+exportQuality.addEventListener("input", syncQualityUI);
+
+// ===== Menu defs =====
 const MENU_DEFS = {
   file: {
     title: "File",
     items: [
-      { title: "Novo (limpar doc)", desc: "Cria um canvas em branco (mantém tamanho atual)", kbd: "—", action: "file.new" },
-      { title: "Importar imagem", desc: "Adiciona imagem como nova layer", kbd: "—", action: "file.importImage" },
+      { title: "Novo (limpar doc)", desc: "Limpa o canvas mantendo tamanho", kbd: "—", action: "file.new" },
+      { title: "Importar imagem", desc: "Adiciona imagem como layer", kbd: "—", action: "file.importImage" },
       { title: "Salvar projeto", desc: "Exporta .json do Photzia", kbd: "—", action: "file.saveProject" },
-      { title: "Abrir projeto", desc: "Importa um .json do Photzia", kbd: "—", action: "file.openProject" },
-      { title: "Exportar PNG", desc: "Render final em PNG", kbd: "—", action: "file.exportPNG" },
+      { title: "Abrir projeto", desc: "Importa .json do Photzia", kbd: "—", action: "file.openProject" },
+      { title: "Exportar (tipo atual)", desc: "Usa formato escolhido no topo", kbd: "—", action: "file.exportCurrent" },
+      { title: "Exportar PNG", desc: "Export rápido em PNG", kbd: "—", action: "file.exportPNG" },
+      { title: "Exportar JPG", desc: "Export rápido em JPG", kbd: "—", action: "file.exportJPG" },
+      { title: "Exportar WebP", desc: "Export rápido em WebP", kbd: "—", action: "file.exportWEBP" },
     ]
   },
   edit: {
@@ -403,8 +422,8 @@ const MENU_DEFS = {
   image: {
     title: "Image",
     items: [
-      { title: "Tamanho do canvas", desc: "Em breve (Resize Canvas)", kbd: "—", action: "stub" },
-      { title: "Rotacionar canvas", desc: "Em breve (Rotate Canvas)", kbd: "—", action: "stub" },
+      { title: "Resize Canvas", desc: "Em breve", kbd: "—", action: "stub" },
+      { title: "Rotate Canvas", desc: "Em breve", kbd: "—", action: "stub" },
     ]
   },
   layer: {
@@ -418,7 +437,7 @@ const MENU_DEFS = {
   select: {
     title: "Select",
     items: [
-      { title: "Ativar ferramenta Seleção", desc: "Marquee/Transform", kbd: "M", action: "select.tool" },
+      { title: "Ferramenta Seleção", desc: "Marquee/Transform", kbd: "M", action: "select.tool" },
       { title: "Cancelar seleção", desc: "Sai sem aplicar", kbd: "Esc", action: "select.cancel" },
       { title: "Aplicar seleção", desc: "Commit transform", kbd: "Enter", action: "select.commit" },
     ]
@@ -436,21 +455,20 @@ const MENU_DEFS = {
       { title: "Zoom 100%", desc: "Reseta zoom", kbd: "—", action: "view.zoom100" },
       { title: "Zoom +", desc: "Aumenta zoom", kbd: "—", action: "view.zoomIn" },
       { title: "Zoom -", desc: "Diminui zoom", kbd: "—", action: "view.zoomOut" },
-      { title: "Aparência", desc: "Abre o painel de customização", kbd: "—", action: "view.appearance" },
+      { title: "Aparência", desc: "Customização total", kbd: "—", action: "view.appearance" },
     ]
   },
   window: {
     title: "Window",
     items: [
       { title: "Mostrar/ocultar Flyout", desc: "Alterna o menu lateral", kbd: "—", action: "window.toggleFlyout" },
-      { title: "Em breve: painéis dockáveis", desc: "Layers/History/Brush", kbd: "—", action: "stub" },
     ]
   },
   help: {
     title: "Help",
     items: [
-      { title: "Atalhos", desc: "Mostra dicas rápidas", kbd: "—", action: "help.shortcuts" },
-      { title: "Sobre", desc: "Info do Photzia", kbd: "—", action: "help.about" },
+      { title: "Atalhos", desc: "Dicas rápidas", kbd: "—", action: "help.shortcuts" },
+      { title: "Sobre", desc: "Photzia v6", kbd: "—", action: "help.about" },
     ]
   }
 };
@@ -493,10 +511,8 @@ function closeFlyout(){
   menuFlyout.hidden = true;
   [...menubar.querySelectorAll(".mitem")].forEach(b => b.classList.remove("active"));
 }
-
 btnCloseFlyout.addEventListener("click", closeFlyout);
 
-// Click on menu buttons
 menubar.addEventListener("click", (e) => {
   const btn = e.target.closest(".mitem");
   if (!btn) return;
@@ -528,77 +544,50 @@ function runMenuAction(action){
       return;
 
     case "file.importImage":
-      fileImportImage.click();
-      return;
+      fileImportImage.click(); return;
 
     case "file.saveProject":
-      btnSaveProject.click();
-      return;
+      btnSaveProject.click(); return;
 
     case "file.openProject":
-      fileOpenProject.click();
-      return;
+      fileOpenProject.click(); return;
+
+    case "file.exportCurrent":
+      exportImage(exportType.value); return;
 
     case "file.exportPNG":
-      btnExport.click();
-      return;
+      exportImage("png"); return;
+    case "file.exportJPG":
+      exportImage("jpeg"); return;
+    case "file.exportWEBP":
+      exportImage("webp"); return;
 
     case "edit.undo":
-      undo();
-      return;
-
+      undo(); return;
     case "edit.redo":
-      redo();
-      return;
+      redo(); return;
 
     case "edit.copy":
-      copySelection();
-      toast("Copiado.");
-      return;
-
+      copySelection(); toast("Copiado."); return;
     case "edit.cut":
-      cutSelection();
-      toast("Recortado.");
-      return;
-
+      cutSelection(); toast("Recortado."); return;
     case "edit.paste":
-      pasteClipboard();
-      toast("Colado.");
-      return;
+      pasteClipboard(); toast("Colado."); return;
 
     case "layer.new":
-      addLayer();
-      toast("Nova layer.");
-      return;
-
+      addLayer(); toast("Nova layer."); return;
     case "layer.clear":
-      btnClearLayer.click();
-      toast("Layer limpa.");
-      return;
-
+      btnClearLayer.click(); toast("Layer limpa."); return;
     case "layer.delete":
-      btnDeleteLayer.click();
-      toast("Layer deletada.");
-      return;
+      btnDeleteLayer.click(); toast("Layer deletada."); return;
 
     case "select.tool":
-      setTool("select");
-      toast("Ferramenta Seleção ativa (M).");
-      return;
-
+      setTool("select"); toast("Seleção ativa."); return;
     case "select.cancel":
-      if (state.selection.active){
-        cancelSelection(true);
-        drawComposite();
-        toast("Seleção cancelada.");
-      }
+      if (state.selection.active){ cancelSelection(true); drawComposite(); toast("Seleção cancelada."); }
       return;
-
     case "select.commit":
-      if (state.selection.active){
-        commitSelection(true);
-        toast("Seleção aplicada.");
-      }
+      if (state.selection.active){ commitSelection(true); toast("Seleção aplicada."); }
       return;
 
     case "view.zoom100":
@@ -624,12 +613,10 @@ function runMenuAction(action){
       return;
 
     case "view.appearance":
-      openTheme();
-      return;
+      openTheme(); return;
 
     case "window.toggleFlyout":
       if (menuFlyout.hidden) {
-        // open last or default
         const first = menubar.querySelector(".mitem[data-menu='file']");
         first?.classList.add("active");
         openMenu("file");
@@ -643,7 +630,7 @@ function runMenuAction(action){
       return;
 
     case "help.about":
-      toast("Photzia v5 — editor no navegador, customizável.");
+      toast("Photzia v6 — export PNG/JPG/WebP + tema novo.");
       return;
 
     default:
@@ -652,7 +639,7 @@ function runMenuAction(action){
   }
 }
 
-// ===== Editor State (v4) =====
+// ===== Editor State =====
 const state = {
   tool: "brush",
   brushSize: parseInt(size.value, 10),
@@ -706,7 +693,6 @@ function makeLayer(name){
     y: 0,
   };
 }
-
 function getActiveLayer(){
   return state.layers.find(l => l.id === state.activeLayerId) || null;
 }
@@ -717,7 +703,7 @@ function layerToDataURL(layer){
 }
 function snapshot(){
   return {
-    version: 5,
+    version: 6,
     w: view.width,
     h: view.height,
     zoom: state.zoom,
@@ -754,7 +740,6 @@ function snapshot(){
     }
   };
 }
-
 async function restore(snap){
   if (!snap || !snap.layers) return;
   cancelSelection(false);
@@ -794,7 +779,6 @@ async function restore(snap){
   syncSelectionPanel();
   drawComposite();
 }
-
 function commitHistory(){
   const snap = snapshot();
   state.history.past.push(snap);
@@ -802,7 +786,6 @@ function commitHistory(){
   state.history.future = [];
   syncUndoRedoButtons();
 }
-
 async function undo(){
   if (state.history.past.length <= 1) return;
   const current = state.history.past.pop();
@@ -830,14 +813,12 @@ function clearView(){
   vctx.setTransform(1,0,0,1,0,0);
   vctx.clearRect(0,0,view.width, view.height);
 }
-
 function applyZoomTransform(ctx){
   const z = state.zoom;
   const cx = view.width / 2;
   const cy = view.height / 2;
   ctx.setTransform(z, 0, 0, z, cx - cx*z, cy - cy*z);
 }
-
 function drawComposite(){
   clearView();
   applyZoomTransform(vctx);
@@ -854,7 +835,6 @@ function drawComposite(){
 
   drawSelectionOverlay();
 }
-
 function radToDeg(r){ return r * 180 / Math.PI; }
 
 function drawSelectionOverlay(){
@@ -997,7 +977,7 @@ toolgrid.addEventListener("click", (e) => {
   setTool(btn.dataset.tool);
 });
 
-// shortcuts
+// Shortcuts
 window.__shiftDown = false;
 window.addEventListener("keydown", (e) => {
   if (e.key === "Shift") window.__shiftDown = true;
@@ -1365,13 +1345,9 @@ function pointerMoveSelect(pos){
     const dy = pos.y - sel.start.py;
 
     let { tx, ty, tw, th } = sel.start;
-    const x1 = tx;
-    const y1 = ty;
-    const x2 = tx + tw;
-    const y2 = ty + th;
+    const x1 = tx, y1 = ty, x2 = tx + tw, y2 = ty + th;
 
     let nx1 = x1, ny1 = y1, nx2 = x2, ny2 = y2;
-
     switch(sel.anchor){
       case "nw": nx1 = x1 + dx; ny1 = y1 + dy; break;
       case "ne": nx2 = x2 + dx; ny1 = y1 + dy; break;
@@ -1676,30 +1652,6 @@ function addLayer(name){
 
 btnNewLayer.addEventListener("click", () => addLayer());
 
-btnExport.addEventListener("click", () => {
-  if (state.selection.active) commitSelection(false);
-
-  const out = document.createElement("canvas");
-  out.width = view.width;
-  out.height = view.height;
-  const octx = out.getContext("2d");
-
-  const ordered = [...state.layers].reverse();
-  for (const layer of ordered){
-    if (!layer.visible) continue;
-    octx.save();
-    octx.globalAlpha = layer.opacity;
-    octx.globalCompositeOperation = layer.blend;
-    octx.drawImage(layer.canvas, layer.x, layer.y);
-    octx.restore();
-  }
-
-  const a = document.createElement("a");
-  a.download = "photzia.png";
-  a.href = out.toDataURL("image/png");
-  a.click();
-});
-
 btnUndo.addEventListener("click", () => undo());
 btnRedo.addEventListener("click", () => redo());
 
@@ -1758,6 +1710,52 @@ fileOpenProject.addEventListener("change", async () => {
   await restore(obj);
   commitHistory();
 });
+
+// Export button
+btnExport.addEventListener("click", () => exportImage(exportType.value));
+
+function exportImage(type){
+  if (state.selection.active) commitSelection(false);
+
+  const out = document.createElement("canvas");
+  out.width = view.width;
+  out.height = view.height;
+  const octx = out.getContext("2d");
+
+  // Nota: JPG/WebP não suportam transparência.
+  // Para manter previsível: se for jpeg/webp, preenche fundo com cor do canvas.
+  if (type === "jpeg" || type === "webp"){
+    octx.save();
+    octx.fillStyle = getCss("--canvas") || "#000000";
+    octx.fillRect(0,0,out.width,out.height);
+    octx.restore();
+  }
+
+  const ordered = [...state.layers].reverse();
+  for (const layer of ordered){
+    if (!layer.visible) continue;
+    octx.save();
+    octx.globalAlpha = layer.opacity;
+    octx.globalCompositeOperation = layer.blend;
+    octx.drawImage(layer.canvas, layer.x, layer.y);
+    octx.restore();
+  }
+
+  let mime = "image/png";
+  let ext = "png";
+  if (type === "jpeg"){ mime = "image/jpeg"; ext = "jpg"; }
+  if (type === "webp"){ mime = "image/webp"; ext = "webp"; }
+
+  const q = Math.max(0.4, Math.min(1, parseInt(exportQuality.value, 10) / 100));
+  const dataUrl = (mime === "image/png") ? out.toDataURL(mime) : out.toDataURL(mime, q);
+
+  const a = document.createElement("a");
+  a.download = `photzia.${ext}`;
+  a.href = dataUrl;
+  a.click();
+
+  toast(`Export: ${ext.toUpperCase()}${mime !== "image/png" ? ` (${Math.round(q*100)}%)` : ""}`);
+}
 
 // Helpers
 function loadImageFromFile(file){
@@ -1832,10 +1830,11 @@ function init(){
   opacityLabel.textContent = `${opacity.value}%`;
   zoomLabel.textContent = `${zoom.value}%`;
 
+  syncQualityUI();
+
   commitHistory();
   syncUndoRedoButtons();
 
   requestAnimationFrame(tick);
 }
-
 init();
