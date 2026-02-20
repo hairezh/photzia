@@ -1,4 +1,4 @@
-// Photzia v2 — Import, Undo/Redo, Save/Load Project, Layer Opacity + Blend Modes, Themes.
+// Photzia v3 — Seleção (marquee) + Transform (move/scale), Copy/Cut/Paste, Commit/Cancel.
 
 const view = document.getElementById("view");
 const vctx = view.getContext("2d");
@@ -35,6 +35,17 @@ const layerBlend = document.getElementById("layerBlend");
 const btnClearLayer = document.getElementById("btnClearLayer");
 const btnDeleteLayer = document.getElementById("btnDeleteLayer");
 
+// Selection UI
+const selEmpty = document.getElementById("selEmpty");
+const selProps = document.getElementById("selProps");
+const selWH = document.getElementById("selWH");
+const selXY = document.getElementById("selXY");
+const btnSelCommit = document.getElementById("btnSelCommit");
+const btnSelCancel = document.getElementById("btnSelCancel");
+const btnSelCopy = document.getElementById("btnSelCopy");
+const btnSelCut = document.getElementById("btnSelCut");
+const btnSelPaste = document.getElementById("btnSelPaste");
+
 // Theme modal
 const btnTheme = document.getElementById("btnTheme");
 const themeModal = document.getElementById("themeModal");
@@ -67,7 +78,6 @@ function applyTheme(themeObj){
   for (const [k,v] of Object.entries(themeObj)){
     document.documentElement.style.setProperty(k, v);
   }
-  // sync inputs
   t_bg.value = cssToHex(getCss("--bg"));
   t_panel.value = cssToHex(getCss("--panel"));
   t_text.value = cssToHex(getCss("--text"));
@@ -75,11 +85,9 @@ function applyTheme(themeObj){
   t_border.value = cssToHex(getCss("--border"));
   t_canvas.value = cssToHex(getCss("--canvas"));
 }
-
 function getCss(varName){
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
-
 function cssToHex(c){
   if (!c) return "#000000";
   if (c.startsWith("#")) return c;
@@ -88,7 +96,6 @@ function cssToHex(c){
   const [r,g,b] = m.slice(1).map(n => parseInt(n,10));
   return "#" + [r,g,b].map(x => x.toString(16).padStart(2,"0")).join("");
 }
-
 function openTheme(){
   themeModal.hidden = false;
   themeModalBackdrop.hidden = false;
@@ -106,7 +113,6 @@ function closeTheme(){
   themeModal.hidden = true;
   themeModalBackdrop.hidden = true;
 }
-
 btnTheme.addEventListener("click", openTheme);
 btnCloseTheme.addEventListener("click", closeTheme);
 themeModalBackdrop.addEventListener("click", closeTheme);
@@ -117,7 +123,6 @@ function getPresets(){
 function setPresets(p){
   localStorage.setItem("photzia_theme_presets", JSON.stringify(p));
 }
-
 function currentThemeObj(){
   return {
     "--bg": t_bg.value,
@@ -128,11 +133,9 @@ function currentThemeObj(){
     "--canvas": t_canvas.value,
   };
 }
-
 [t_bg, t_panel, t_text, t_accent, t_border, t_canvas].forEach(inp => {
   inp.addEventListener("input", () => applyTheme(currentThemeObj()));
 });
-
 btnSaveTheme.addEventListener("click", () => {
   const name = (themeName.value || "").trim();
   if (!name) return;
@@ -142,12 +145,10 @@ btnSaveTheme.addEventListener("click", () => {
   renderPresets();
   themeName.value = "";
 });
-
 btnResetTheme.addEventListener("click", () => {
   applyTheme(DEFAULT_THEME);
   renderPresets();
 });
-
 function renderPresets(){
   const presets = getPresets();
   themePresetsEl.innerHTML = "";
@@ -202,12 +203,30 @@ const state = {
 
   moving: { start: null, layerStart: null },
 
-  history: {
-    past: [],
-    future: [],
-    max: 40,
-    // to avoid capturing too often while drawing, we capture on "commit" (pointerup, import, delete, clear, etc.)
-  }
+  // selection + transform
+  selection: {
+    active: false,
+    // selection rect in document(canvas) coords
+    x: 0, y: 0, w: 0, h: 0,
+
+    // floating buffer (pixels)
+    buffer: null, // canvas
+    bufferW: 0,
+    bufferH: 0,
+
+    // transform of buffer
+    tx: 0, ty: 0, // top-left in document coords
+    tw: 0, th: 0, // transformed size
+
+    mode: "idle", // "creating" | "moving" | "scaling"
+    anchor: null, // handle id
+    start: null,  // pointer start info
+    lifted: false, // whether pixels have been removed from layer already
+    changed: false,
+  },
+
+  clipboard: null, // { png, w, h } or { canvas }
+  history: { past: [], future: [], max: 40 }
 };
 
 function makeLayer(name){
@@ -233,16 +252,13 @@ function getActiveLayer(){
   return state.layers.find(l => l.id === state.activeLayerId) || null;
 }
 
-// ===== History (Undo/Redo) =====
-// We store a serialized snapshot with per-layer PNG dataURL (content) + metadata.
-// For a browser editor, this is a practical MVP (later you can optimize to ImageData diffs).
+// ===== History =====
 function layerToDataURL(layer){
   return layer.canvas.toDataURL("image/png");
 }
-
 function snapshot(){
   return {
-    version: 2,
+    version: 3,
     w: view.width,
     h: view.height,
     zoom: state.zoom,
@@ -273,16 +289,15 @@ function snapshot(){
 async function restore(snap){
   if (!snap || !snap.layers) return;
 
-  // canvas size
+  // cancel any selection (avoid half-state)
+  cancelSelection(false);
+
   if (snap.w && snap.h){
     view.width = snap.w;
     view.height = snap.h;
   }
-
-  // theme
   if (snap.theme) applyTheme(snap.theme);
 
-  // rebuild layers
   state.layers = [];
   for (const L of snap.layers){
     const layer = makeLayer(L.name);
@@ -292,10 +307,7 @@ async function restore(snap){
     layer.blend = L.blend || "source-over";
     layer.x = L.x || 0;
     layer.y = L.y || 0;
-
-    // draw png into layer canvas
     await drawPngToLayer(layer, L.png);
-
     state.layers.push(layer);
   }
 
@@ -307,19 +319,19 @@ async function restore(snap){
 
   renderLayersUI();
   syncActiveLayerPanel();
+  syncSelectionPanel();
   drawComposite();
 }
 
-function commitHistory(reason=""){
+function commitHistory(){
   const snap = snapshot();
   state.history.past.push(snap);
   if (state.history.past.length > state.history.max) state.history.past.shift();
-  state.history.future = []; // clear redo stack
+  state.history.future = [];
   syncUndoRedoButtons();
 }
 
 async function undo(){
-  // need at least 2 snapshots: current + previous
   if (state.history.past.length <= 1) return;
   const current = state.history.past.pop();
   state.history.future.push(current);
@@ -327,7 +339,6 @@ async function undo(){
   await restore(prev);
   syncUndoRedoButtons();
 }
-
 async function redo(){
   if (!state.history.future.length) return;
   const next = state.history.future.pop();
@@ -335,7 +346,6 @@ async function redo(){
   await restore(next);
   syncUndoRedoButtons();
 }
-
 function syncUndoRedoButtons(){
   btnUndo.disabled = state.history.past.length <= 1;
   btnRedo.disabled = state.history.future.length === 0;
@@ -349,26 +359,70 @@ function clearView(){
   vctx.clearRect(0,0,view.width, view.height);
 }
 
-function drawComposite(){
-  clearView();
-
-  // zoom centered
+function applyZoomTransform(ctx){
   const z = state.zoom;
   const cx = view.width / 2;
   const cy = view.height / 2;
-  vctx.setTransform(z, 0, 0, z, cx - cx*z, cy - cy*z);
+  ctx.setTransform(z, 0, 0, z, cx - cx*z, cy - cy*z);
+}
 
-  // background is CSS; canvas is transparent
+function drawComposite(){
+  clearView();
+  applyZoomTransform(vctx);
+
   const ordered = [...state.layers].reverse();
   for (const layer of ordered){
     if (!layer.visible) continue;
-
     vctx.save();
     vctx.globalAlpha = layer.opacity;
     vctx.globalCompositeOperation = layer.blend;
     vctx.drawImage(layer.canvas, layer.x, layer.y);
     vctx.restore();
   }
+
+  drawSelectionOverlay();
+}
+
+function drawSelectionOverlay(){
+  const sel = state.selection;
+  if (!sel.active) return;
+
+  // Selection box is in document coords; just draw on top using same transform.
+  vctx.save();
+  vctx.globalAlpha = 1;
+  vctx.globalCompositeOperation = "source-over";
+
+  // box
+  vctx.setLineDash([6, 4]);
+  vctx.lineWidth = 1 / state.zoom; // keep visually stable
+  vctx.strokeStyle = "rgba(255,255,255,0.9)";
+  vctx.strokeRect(sel.tx, sel.ty, sel.tw, sel.th);
+
+  // handles (corners)
+  vctx.setLineDash([]);
+  const hs = 8 / state.zoom;
+  const handles = getHandles(sel);
+  vctx.fillStyle = "rgba(255,255,255,0.95)";
+  vctx.strokeStyle = "rgba(0,0,0,0.55)";
+  vctx.lineWidth = 1 / state.zoom;
+
+  for (const h of handles){
+    vctx.beginPath();
+    vctx.rect(h.x - hs/2, h.y - hs/2, hs, hs);
+    vctx.fill();
+    vctx.stroke();
+  }
+
+  // floating buffer preview (if lifted)
+  if (sel.buffer){
+    vctx.save();
+    vctx.globalAlpha = 0.95;
+    vctx.globalCompositeOperation = "source-over";
+    vctx.drawImage(sel.buffer, sel.tx, sel.ty, sel.tw, sel.th);
+    vctx.restore();
+  }
+
+  vctx.restore();
 }
 
 // ===== Pointer coords =====
@@ -400,7 +454,6 @@ function setTool(tool){
     b.classList.toggle("active", b.dataset.tool === tool);
   });
 }
-
 toolgrid.addEventListener("click", (e) => {
   const btn = e.target.closest(".tool");
   if (!btn) return;
@@ -409,33 +462,67 @@ toolgrid.addEventListener("click", (e) => {
 
 // Shortcuts
 window.addEventListener("keydown", (e) => {
-  // tool shortcuts
-  if (!e.ctrlKey && !e.metaKey && !e.altKey){
+  const ctrl = e.ctrlKey || e.metaKey;
+
+  // tools
+  if (!ctrl && !e.altKey){
     if (e.key === "b" || e.key === "B") setTool("brush");
     if (e.key === "e" || e.key === "E") setTool("eraser");
     if (e.key === "v" || e.key === "V") setTool("move");
+    if (e.key === "m" || e.key === "M") setTool("select");
+  }
+
+  // selection control
+  if (e.key === "Escape"){
+    if (state.selection.active){
+      e.preventDefault();
+      cancelSelection(true);
+      drawComposite();
+    }
+    return;
+  }
+
+  if (e.key === "Enter"){
+    if (state.selection.active){
+      e.preventDefault();
+      commitSelection();
+    }
+    return;
   }
 
   // undo/redo
-  const ctrl = e.ctrlKey || e.metaKey;
-  if (!ctrl) return;
+  if (ctrl){
+    if ((e.key === "z" || e.key === "Z") && e.shiftKey){
+      e.preventDefault();
+      redo();
+      return;
+    }
+    if (e.key === "z" || e.key === "Z"){
+      e.preventDefault();
+      undo();
+      return;
+    }
+    if (e.key === "y" || e.key === "Y"){
+      e.preventDefault();
+      redo();
+      return;
+    }
 
-  if ((e.key === "z" || e.key === "Z") && e.shiftKey){
-    e.preventDefault();
-    redo();
-    return;
-  }
-
-  if (e.key === "z" || e.key === "Z"){
-    e.preventDefault();
-    undo();
-    return;
-  }
-
-  if (e.key === "y" || e.key === "Y"){
-    e.preventDefault();
-    redo();
-    return;
+    // clipboard internal
+    if (e.key === "c" || e.key === "C"){
+      if (state.selection.active){ e.preventDefault(); copySelection(); }
+      return;
+    }
+    if (e.key === "x" || e.key === "X"){
+      if (state.selection.active){ e.preventDefault(); cutSelection(); }
+      return;
+    }
+    if (e.key === "v" || e.key === "V"){
+      // paste is allowed even without selection
+      e.preventDefault();
+      pasteClipboard();
+      return;
+    }
   }
 });
 
@@ -457,7 +544,7 @@ zoom.addEventListener("input", () => {
   drawComposite();
 });
 
-// Drawing to offscreen layer
+// ===== Drawing to layer =====
 function strokeTo(layer, from, to, erase=false){
   const ctx = layer.ctx;
   ctx.save();
@@ -481,7 +568,7 @@ function strokeTo(layer, from, to, erase=false){
   ctx.restore();
 }
 
-// capture history only once per gesture/action
+// gesture commit
 let gestureDidChange = false;
 
 view.addEventListener("pointerdown", (e) => {
@@ -494,6 +581,18 @@ view.addEventListener("pointerdown", (e) => {
 
   const layer = getActiveLayer();
   if (!layer) return;
+
+  // selection tool
+  if (state.tool === "select"){
+    pointerDownSelect(pos);
+    drawComposite();
+    return;
+  }
+
+  // if user starts drawing with an active selection, commit it first (like “apply before paint”)
+  if (state.selection.active){
+    commitSelection(false);
+  }
 
   if (state.tool === "move"){
     state.moving.start = pos;
@@ -510,8 +609,15 @@ view.addEventListener("pointerdown", (e) => {
 view.addEventListener("pointermove", (e) => {
   if (!state.isPointerDown) return;
   const pos = getPointerPos(e);
+
   const layer = getActiveLayer();
   if (!layer) return;
+
+  if (state.tool === "select"){
+    pointerMoveSelect(pos);
+    drawComposite();
+    return;
+  }
 
   if (state.tool === "move"){
     const dx = pos.x - state.moving.start.x;
@@ -535,11 +641,406 @@ view.addEventListener("pointerup", () => {
   state.moving.start = null;
   state.moving.layerStart = null;
 
+  // selection tool finalization is handled in pointerUpSelect
+  if (state.tool === "select"){
+    pointerUpSelect();
+    drawComposite();
+    return;
+  }
+
   if (gestureDidChange){
-    commitHistory("gesture");
+    commitHistory();
     gestureDidChange = false;
   }
 });
+
+// ===== Selection core =====
+function normalizeRect(x1,y1,x2,y2){
+  const x = Math.min(x1,x2);
+  const y = Math.min(y1,y2);
+  const w = Math.abs(x2-x1);
+  const h = Math.abs(y2-y1);
+  return {x,y,w,h};
+}
+
+function setSelectionRect(x,y,w,h){
+  const sel = state.selection;
+  sel.active = true;
+  sel.x = x; sel.y = y; sel.w = w; sel.h = h;
+
+  // initial transform matches selection box
+  sel.tx = x; sel.ty = y; sel.tw = w; sel.th = h;
+
+  sel.changed = false;
+  sel.mode = "idle";
+  sel.anchor = null;
+  sel.start = null;
+  sel.lifted = false;
+
+  sel.buffer = null;
+  sel.bufferW = 0;
+  sel.bufferH = 0;
+
+  syncSelectionPanel();
+}
+
+function clearSelectionState(){
+  const sel = state.selection;
+  sel.active = false;
+  sel.x=sel.y=sel.w=sel.h=0;
+  sel.tx=sel.ty=sel.tw=sel.th=0;
+  sel.buffer = null;
+  sel.bufferW = 0; sel.bufferH = 0;
+  sel.mode = "idle";
+  sel.anchor = null;
+  sel.start = null;
+  sel.lifted = false;
+  sel.changed = false;
+  syncSelectionPanel();
+}
+
+function syncSelectionPanel(){
+  const sel = state.selection;
+  const has = sel.active;
+  selEmpty.hidden = has;
+  selProps.hidden = !has;
+  if (!has) return;
+
+  selWH.textContent = `${Math.round(sel.tw)}×${Math.round(sel.th)}`;
+  selXY.textContent = `${Math.round(sel.tx)},${Math.round(sel.ty)}`;
+}
+
+// handles: four corners
+function getHandles(sel){
+  const x1 = sel.tx, y1 = sel.ty;
+  const x2 = sel.tx + sel.tw, y2 = sel.ty + sel.th;
+  return [
+    { id:"nw", x:x1, y:y1 },
+    { id:"ne", x:x2, y:y1 },
+    { id:"se", x:x2, y:y2 },
+    { id:"sw", x:x1, y:y2 },
+  ];
+}
+
+function hitTestHandle(pos){
+  const sel = state.selection;
+  if (!sel.active) return null;
+  const hs = 10 / state.zoom;
+  for (const h of getHandles(sel)){
+    if (Math.abs(pos.x - h.x) <= hs && Math.abs(pos.y - h.y) <= hs){
+      return h.id;
+    }
+  }
+  return null;
+}
+
+function pointInRect(px,py,x,y,w,h){
+  return px>=x && py>=y && px<=x+w && py<=y+h;
+}
+
+function ensureBufferFromLayer(){
+  const sel = state.selection;
+  const layer = getActiveLayer();
+  if (!layer) return false;
+
+  // if already has buffer, ok
+  if (sel.buffer) return true;
+
+  // create buffer from pixels in selection area (document coords -> layer coords)
+  const bw = Math.max(1, Math.floor(sel.w));
+  const bh = Math.max(1, Math.floor(sel.h));
+  const buf = document.createElement("canvas");
+  buf.width = bw;
+  buf.height = bh;
+  const bctx = buf.getContext("2d");
+
+  // source area in the layer is (sel.x - layer.x, sel.y - layer.y)
+  const sx = Math.floor(sel.x - layer.x);
+  const sy = Math.floor(sel.y - layer.y);
+
+  bctx.drawImage(layer.canvas, sx, sy, bw, bh, 0, 0, bw, bh);
+
+  sel.buffer = buf;
+  sel.bufferW = bw;
+  sel.bufferH = bh;
+
+  return true;
+}
+
+function liftPixelsIfNeeded(){
+  const sel = state.selection;
+  const layer = getActiveLayer();
+  if (!layer) return;
+
+  if (sel.lifted) return;
+  if (!sel.buffer) return;
+
+  // remove pixels from original region (cut-out)
+  layer.ctx.save();
+  layer.ctx.globalCompositeOperation = "destination-out";
+  layer.ctx.fillStyle = "rgba(0,0,0,1)";
+  layer.ctx.fillRect(sel.x - layer.x, sel.y - layer.y, sel.w, sel.h);
+  layer.ctx.restore();
+
+  sel.lifted = true;
+}
+
+function pointerDownSelect(pos){
+  const sel = state.selection;
+
+  // if there is an active selection: allow move/scale
+  if (sel.active){
+    const handle = hitTestHandle(pos);
+    if (handle){
+      // start scaling
+      ensureBufferFromLayer();
+      liftPixelsIfNeeded();
+      sel.mode = "scaling";
+      sel.anchor = handle;
+      sel.start = {
+        px: pos.x, py: pos.y,
+        tx: sel.tx, ty: sel.ty, tw: sel.tw, th: sel.th
+      };
+      return;
+    }
+
+    // inside selection -> move
+    if (pointInRect(pos.x, pos.y, sel.tx, sel.ty, sel.tw, sel.th)){
+      ensureBufferFromLayer();
+      liftPixelsIfNeeded();
+      sel.mode = "moving";
+      sel.start = {
+        px: pos.x, py: pos.y,
+        tx: sel.tx, ty: sel.ty
+      };
+      return;
+    }
+
+    // click outside -> start a new selection (cancel old without committing)
+    cancelSelection(true);
+  }
+
+  // start creating
+  sel.active = true;
+  sel.mode = "creating";
+  sel.start = { px: pos.x, py: pos.y };
+  sel.x = pos.x; sel.y = pos.y; sel.w = 0; sel.h = 0;
+  sel.tx = pos.x; sel.ty = pos.y; sel.tw = 0; sel.th = 0;
+  sel.buffer = null;
+  sel.lifted = false;
+  sel.changed = false;
+  syncSelectionPanel();
+}
+
+function pointerMoveSelect(pos){
+  const sel = state.selection;
+  if (!sel.active) return;
+
+  if (sel.mode === "creating"){
+    const r = normalizeRect(sel.start.px, sel.start.py, pos.x, pos.y);
+    sel.x = r.x; sel.y = r.y; sel.w = r.w; sel.h = r.h;
+    sel.tx = r.x; sel.ty = r.y; sel.tw = r.w; sel.th = r.h;
+    syncSelectionPanel();
+    return;
+  }
+
+  if (sel.mode === "moving"){
+    const dx = pos.x - sel.start.px;
+    const dy = pos.y - sel.start.py;
+    sel.tx = sel.start.tx + dx;
+    sel.ty = sel.start.ty + dy;
+    sel.changed = true;
+    syncSelectionPanel();
+    return;
+  }
+
+  if (sel.mode === "scaling"){
+    const dx = pos.x - sel.start.px;
+    const dy = pos.y - sel.start.py;
+
+    let { tx, ty, tw, th } = sel.start;
+
+    // scale based on which handle is being dragged
+    // Keep opposite corner fixed.
+    const x1 = tx;
+    const y1 = ty;
+    const x2 = tx + tw;
+    const y2 = ty + th;
+
+    let nx1 = x1, ny1 = y1, nx2 = x2, ny2 = y2;
+
+    switch(sel.anchor){
+      case "nw": nx1 = x1 + dx; ny1 = y1 + dy; break;
+      case "ne": nx2 = x2 + dx; ny1 = y1 + dy; break;
+      case "se": nx2 = x2 + dx; ny2 = y2 + dy; break;
+      case "sw": nx1 = x1 + dx; ny2 = y2 + dy; break;
+    }
+
+    // prevent flip (minimum size)
+    const minSize = 4;
+    if (Math.abs(nx2 - nx1) < minSize) nx2 = nx1 + Math.sign(nx2 - nx1 || 1) * minSize;
+    if (Math.abs(ny2 - ny1) < minSize) ny2 = ny1 + Math.sign(ny2 - ny1 || 1) * minSize;
+
+    sel.tx = Math.min(nx1,nx2);
+    sel.ty = Math.min(ny1,ny2);
+    sel.tw = Math.abs(nx2-nx1);
+    sel.th = Math.abs(ny2-ny1);
+
+    sel.changed = true;
+    syncSelectionPanel();
+    return;
+  }
+}
+
+function pointerUpSelect(){
+  const sel = state.selection;
+  if (!sel.active) return;
+
+  if (sel.mode === "creating"){
+    // if too small, cancel
+    if (sel.w < 2 || sel.h < 2){
+      clearSelectionState();
+      return;
+    }
+    sel.mode = "idle";
+    sel.start = null;
+    sel.anchor = null;
+    // do not create buffer yet (lazy)
+    syncSelectionPanel();
+    return;
+  }
+
+  if (sel.mode === "moving" || sel.mode === "scaling"){
+    sel.mode = "idle";
+    sel.start = null;
+    sel.anchor = null;
+    syncSelectionPanel();
+    return;
+  }
+}
+
+function commitSelection(pushHistory=true){
+  const sel = state.selection;
+  const layer = getActiveLayer();
+  if (!sel.active || !layer) return;
+
+  // if there were no changes and not lifted, just keep selection? We'll end selection without changing.
+  if (!sel.buffer){
+    // selection exists but no transform; nothing to apply
+    clearSelectionState();
+    drawComposite();
+    return;
+  }
+
+  // Draw buffer back to layer with transformed bounds
+  layer.ctx.save();
+  layer.ctx.globalCompositeOperation = "source-over";
+  layer.ctx.globalAlpha = 1;
+  layer.ctx.drawImage(sel.buffer, sel.tx - layer.x, sel.ty - layer.y, sel.tw, sel.th);
+  layer.ctx.restore();
+
+  clearSelectionState();
+  drawComposite();
+  if (pushHistory) commitHistory();
+}
+
+function cancelSelection(pushHistory){
+  const sel = state.selection;
+  const layer = getActiveLayer();
+
+  if (!sel.active){
+    syncSelectionPanel();
+    return;
+  }
+
+  // If we lifted pixels, we must restore them to original place
+  if (sel.buffer && sel.lifted && layer){
+    layer.ctx.save();
+    layer.ctx.globalCompositeOperation = "source-over";
+    layer.ctx.globalAlpha = 1;
+    // restore original at original selection rect
+    layer.ctx.drawImage(sel.buffer, sel.x - layer.x, sel.y - layer.y, sel.w, sel.h);
+    layer.ctx.restore();
+
+    if (pushHistory) commitHistory();
+  }
+
+  clearSelectionState();
+}
+
+// ===== Clipboard ops =====
+function copySelection(){
+  const sel = state.selection;
+  if (!sel.active) return;
+  if (!ensureBufferFromLayer()) return;
+
+  // store PNG to keep simple and resilient
+  state.clipboard = {
+    png: sel.buffer.toDataURL("image/png"),
+    w: sel.bufferW,
+    h: sel.bufferH,
+  };
+}
+
+function cutSelection(){
+  const sel = state.selection;
+  if (!sel.active) return;
+  if (!ensureBufferFromLayer()) return;
+
+  copySelection();
+  // lift immediately (remove from layer)
+  liftPixelsIfNeeded();
+  sel.changed = true;
+  drawComposite();
+  commitHistory();
+}
+
+async function pasteClipboard(){
+  if (!state.clipboard) return;
+  const layer = getActiveLayer();
+  if (!layer) return;
+
+  // commit any active selection first
+  if (state.selection.active){
+    commitSelection(false);
+  }
+
+  const img = await loadImageFromDataURL(state.clipboard.png);
+
+  // create a buffer canvas from clipboard
+  const buf = document.createElement("canvas");
+  buf.width = img.width;
+  buf.height = img.height;
+  buf.getContext("2d").drawImage(img, 0, 0);
+
+  // center paste
+  const x = Math.round((view.width - img.width) / 2);
+  const y = Math.round((view.height - img.height) / 2);
+
+  const sel = state.selection;
+  sel.active = true;
+  sel.x = x; sel.y = y; sel.w = img.width; sel.h = img.height;
+  sel.tx = x; sel.ty = y; sel.tw = img.width; sel.th = img.height;
+
+  sel.buffer = buf;
+  sel.bufferW = img.width;
+  sel.bufferH = img.height;
+
+  sel.lifted = true; // it's a floating paste, not from layer pixels
+  sel.changed = true;
+  sel.mode = "idle";
+  sel.start = null;
+  sel.anchor = null;
+
+  syncSelectionPanel();
+  drawComposite();
+}
+
+btnSelCommit.addEventListener("click", () => commitSelection(true));
+btnSelCancel.addEventListener("click", () => { cancelSelection(true); drawComposite(); });
+btnSelCopy.addEventListener("click", () => copySelection());
+btnSelCut.addEventListener("click", () => cutSelection());
+btnSelPaste.addEventListener("click", () => pasteClipboard());
 
 // ===== Layers UI =====
 function renderLayersUI(){
@@ -548,9 +1049,14 @@ function renderLayersUI(){
     const row = document.createElement("div");
     row.className = "layer" + (layer.id === state.activeLayerId ? " active" : "");
     row.addEventListener("click", () => {
+      // if selection exists, apply before switching (avoids confusion)
+      if (state.selection.active) commitSelection(false);
+
       state.activeLayerId = layer.id;
       renderLayersUI();
       syncActiveLayerPanel();
+      syncSelectionPanel();
+      drawComposite();
     });
 
     const eye = document.createElement("button");
@@ -562,7 +1068,7 @@ function renderLayersUI(){
       layer.visible = !layer.visible;
       renderLayersUI();
       drawComposite();
-      commitHistory("toggle visible");
+      commitHistory();
     });
 
     const name = document.createElement("div");
@@ -614,12 +1120,10 @@ layerName.addEventListener("input", () => {
   layer.name = layerName.value;
   renderLayersUI();
 });
-
 layerName.addEventListener("change", () => {
-  // commit only when user finishes edit
   const layer = getActiveLayer();
   if (!layer) return;
-  commitHistory("rename layer");
+  commitHistory();
 });
 
 layerOpacity.addEventListener("input", () => {
@@ -629,12 +1133,7 @@ layerOpacity.addEventListener("input", () => {
   layerOpacityLabel.textContent = `${Math.round(layer.opacity * 100)}%`;
   drawComposite();
 });
-
-layerOpacity.addEventListener("change", () => {
-  const layer = getActiveLayer();
-  if (!layer) return;
-  commitHistory("layer opacity");
-});
+layerOpacity.addEventListener("change", () => commitHistory());
 
 layerBlend.addEventListener("change", () => {
   const layer = getActiveLayer();
@@ -642,18 +1141,23 @@ layerBlend.addEventListener("change", () => {
   layer.blend = layerBlend.value;
   renderLayersUI();
   drawComposite();
-  commitHistory("layer blend");
+  commitHistory();
 });
 
 btnClearLayer.addEventListener("click", () => {
+  // apply selection first to avoid “sumir”
+  if (state.selection.active) commitSelection(false);
+
   const layer = getActiveLayer();
   if (!layer) return;
   layer.ctx.clearRect(0,0,layer.canvas.width, layer.canvas.height);
   drawComposite();
-  commitHistory("clear layer");
+  commitHistory();
 });
 
 btnDeleteLayer.addEventListener("click", () => {
+  if (state.selection.active) commitSelection(false);
+
   const layer = getActiveLayer();
   if (!layer) return;
   const idx = state.layers.findIndex(l => l.id === layer.id);
@@ -662,23 +1166,27 @@ btnDeleteLayer.addEventListener("click", () => {
   renderLayersUI();
   syncActiveLayerPanel();
   drawComposite();
-  commitHistory("delete layer");
+  commitHistory();
 });
 
 // ===== Actions =====
 function addLayer(name){
+  if (state.selection.active) commitSelection(false);
+
   const layer = makeLayer(name);
-  state.layers.unshift(layer); // top
+  state.layers.unshift(layer);
   state.activeLayerId = layer.id;
   renderLayersUI();
   syncActiveLayerPanel();
   drawComposite();
-  commitHistory("add layer");
+  commitHistory();
 }
 
 btnNewLayer.addEventListener("click", () => addLayer());
 
 btnExport.addEventListener("click", () => {
+  if (state.selection.active) commitSelection(false);
+
   const out = document.createElement("canvas");
   out.width = view.width;
   out.height = view.height;
@@ -709,10 +1217,11 @@ fileImportImage.addEventListener("change", async () => {
   fileImportImage.value = "";
   if (!file) return;
 
+  if (state.selection.active) commitSelection(false);
+
   const img = await loadImageFromFile(file);
 
   const layer = makeLayer(file.name.replace(/\.[^.]+$/, "") || "Imported");
-  // draw centered
   const scale = Math.min(view.width / img.width, view.height / img.height, 1);
   const w = Math.round(img.width * scale);
   const h = Math.round(img.height * scale);
@@ -726,11 +1235,13 @@ fileImportImage.addEventListener("change", async () => {
   renderLayersUI();
   syncActiveLayerPanel();
   drawComposite();
-  commitHistory("import image");
+  commitHistory();
 });
 
 // ===== Save/Load Project =====
 btnSaveProject.addEventListener("click", () => {
+  if (state.selection.active) commitSelection(false);
+
   const snap = snapshot();
   const blob = new Blob([JSON.stringify(snap)], { type: "application/json" });
   const a = document.createElement("a");
@@ -754,30 +1265,30 @@ fileOpenProject.addEventListener("change", async () => {
     return;
   }
 
-  // reset history, then restore, then re-seed history
   state.history.past = [];
   state.history.future = [];
   await restore(obj);
-  commitHistory("open project"); // seed new baseline
+  commitHistory(); // baseline
 });
 
-// ===== Helpers for images =====
+// ===== Helpers =====
 function loadImageFromFile(file){
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file);
     const img = new Image();
-    img.onload = () => {
-      URL.revokeObjectURL(url);
-      resolve(img);
-    };
-    img.onerror = (e) => {
-      URL.revokeObjectURL(url);
-      reject(e);
-    };
+    img.onload = () => { URL.revokeObjectURL(url); resolve(img); };
+    img.onerror = (e) => { URL.revokeObjectURL(url); reject(e); };
     img.src = url;
   });
 }
-
+function loadImageFromDataURL(dataUrl){
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(img);
+    img.src = dataUrl;
+  });
+}
 function drawPngToLayer(layer, dataUrl){
   return new Promise((resolve) => {
     if (!dataUrl){
@@ -792,7 +1303,6 @@ function drawPngToLayer(layer, dataUrl){
       resolve();
     };
     img.onerror = () => {
-      // if it fails, keep blank
       layer.ctx.clearRect(0,0,layer.canvas.width, layer.canvas.height);
       resolve();
     };
@@ -804,21 +1314,20 @@ function drawPngToLayer(layer, dataUrl){
 function init(){
   applyTheme(DEFAULT_THEME);
 
-  // base layer
   const base = makeLayer("Layer 1");
   state.layers = [base];
   state.activeLayerId = base.id;
 
   renderLayersUI();
   syncActiveLayerPanel();
+  syncSelectionPanel();
   drawComposite();
 
   sizeLabel.textContent = size.value;
   opacityLabel.textContent = `${opacity.value}%`;
   zoomLabel.textContent = `${zoom.value}%`;
 
-  // seed history baseline
-  commitHistory("init");
+  commitHistory();
   syncUndoRedoButtons();
 }
 init();
