@@ -9,9 +9,10 @@
 <body>
   <header class="topbar">
     <div class="brand">
-      <span class="logo">◼︎</span>
+      <img id="appIcon" class="appicon" alt="Photzia icon"
+        src="https://i.pinimg.com/1200x/46/22/a5/4622a5352569a33762c60f091485936b.jpg" />
       <strong>Photzia</strong>
-      <span class="muted">v3</span>
+      <span class="muted">v4</span>
     </div>
 
     <div class="topbar-actions">
@@ -47,7 +48,7 @@
 
       <div class="sep"></div>
 
-      <button id="btnTheme" class="btn">Tema</button>
+      <button id="btnTheme" class="btn">Aparência</button>
     </div>
   </header>
 
@@ -59,7 +60,7 @@
         <button class="tool active" data-tool="brush" title="Pincel (B)">🖌️</button>
         <button class="tool" data-tool="eraser" title="Borracha (E)">🧽</button>
         <button class="tool" data-tool="move" title="Mover layer (V)">🧲</button>
-        <button class="tool" data-tool="select" title="Seleção retangular (M)">▭</button>
+        <button class="tool" data-tool="select" title="Seleção/Transform (M)">▭</button>
       </div>
 
       <div class="section">
@@ -86,8 +87,11 @@
         <h4>Seleção & Transform</h4>
         <div class="kbdlist muted">
           <div><span class="kbd">M</span> seleção retangular</div>
-          <div><span class="kbd">Esc</span> deselecionar</div>
-          <div><span class="kbd">Enter</span> aplicar transformação</div>
+          <div><span class="kbd">arrastar</span> mover seleção</div>
+          <div><span class="kbd">cantos</span> redimensionar</div>
+          <div><span class="kbd">handle</span> rotacionar</div>
+          <div><span class="kbd">Enter</span> aplicar</div>
+          <div><span class="kbd">Esc</span> cancelar</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> copiar</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">X</span> recortar</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">V</span> colar</div>
@@ -166,6 +170,10 @@
             <span class="muted">X,Y</span>
             <span id="selXY" class="pill">0,0</span>
           </div>
+          <div class="row">
+            <span class="muted">Rot</span>
+            <span id="selRot" class="pill">0°</span>
+          </div>
 
           <div class="row gap">
             <button id="btnSelCommit" class="btn">Aplicar (Enter)</button>
@@ -182,35 +190,120 @@
     </aside>
   </main>
 
-  <!-- Modal de Tema -->
+  <!-- Modal de Aparência -->
   <div class="modal-backdrop" id="themeModalBackdrop" hidden></div>
   <div class="modal" id="themeModal" hidden>
     <div class="modal-header">
-      <strong>Tema do Photzia</strong>
+      <strong>Aparência do Photzia</strong>
       <button class="btn ghost" id="btnCloseTheme">✕</button>
     </div>
 
     <div class="modal-body">
-      <p class="muted">Tudo aqui vira <code>CSS variables</code>. Você pode salvar presets.</p>
+      <p class="muted">Tudo aqui vira <code>CSS variables</code> e pode ser salvo como preset.</p>
 
-      <div class="themegrid">
-        <label><span>Fundo</span><input type="color" id="t_bg" /></label>
-        <label><span>Painéis</span><input type="color" id="t_panel" /></label>
-        <label><span>Texto</span><input type="color" id="t_text" /></label>
-        <label><span>Destaque</span><input type="color" id="t_accent" /></label>
-        <label><span>Borda</span><input type="color" id="t_border" /></label>
-        <label><span>Canvas</span><input type="color" id="t_canvas" /></label>
-      </div>
-
-      <div class="row gap">
-        <input id="themeName" class="input" placeholder="nome do tema (ex: neon)" />
-        <button id="btnSaveTheme" class="btn">Salvar</button>
-        <button id="btnResetTheme" class="btn ghost">Reset</button>
+      <div class="section">
+        <h4>Cores</h4>
+        <div class="themegrid">
+          <label><span>Fundo</span><input type="color" id="t_bg" /></label>
+          <label><span>Painéis</span><input type="color" id="t_panel" /></label>
+          <label><span>Texto</span><input type="color" id="t_text" /></label>
+          <label><span>Destaque</span><input type="color" id="t_accent" /></label>
+          <label><span>Borda</span><input type="color" id="t_border" /></label>
+          <label><span>Canvas</span><input type="color" id="t_canvas" /></label>
+        </div>
       </div>
 
       <div class="section">
-        <h4>Presets salvos</h4>
-        <div id="themePresets" class="presetlist"></div>
+        <h4>Material / Glass</h4>
+        <label class="row">
+          <span class="muted">Blur (0–24px)</span>
+          <input id="t_blur" type="range" min="0" max="24" value="10" />
+          <span id="t_blurLabel" class="pill">10px</span>
+        </label>
+
+        <label class="row">
+          <span class="muted">Transp. Painéis</span>
+          <input id="t_panelAlpha" type="range" min="10" max="100" value="92" />
+          <span id="t_panelAlphaLabel" class="pill">92%</span>
+        </label>
+
+        <label class="row">
+          <span class="muted">Transp. Topbar</span>
+          <input id="t_topbarAlpha" type="range" min="10" max="100" value="78" />
+          <span id="t_topbarAlphaLabel" class="pill">78%</span>
+        </label>
+      </div>
+
+      <div class="section">
+        <h4>Background (imagem)</h4>
+
+        <label class="row">
+          <span class="muted">URL</span>
+          <input id="t_bgImageUrl" class="input" placeholder="https://..." />
+        </label>
+
+        <div class="row gap">
+          <label class="btn filebtn ghost" title="Upload de background">
+            Upload
+            <input id="t_bgImageUpload" type="file" accept="image/*" hidden />
+          </label>
+          <button id="btnBgClear" class="btn ghost">Remover</button>
+        </div>
+
+        <label class="row">
+          <span class="muted">Opacidade</span>
+          <input id="t_bgImageAlpha" type="range" min="0" max="100" value="35" />
+          <span id="t_bgImageAlphaLabel" class="pill">35%</span>
+        </label>
+
+        <label class="row">
+          <span class="muted">Modo</span>
+          <select id="t_bgImageFit" class="select">
+            <option value="cover">Cover</option>
+            <option value="contain">Contain</option>
+            <option value="auto">Auto</option>
+          </select>
+        </label>
+
+        <label class="row">
+          <span class="muted">Posição</span>
+          <select id="t_bgImagePos" class="select">
+            <option value="center center">Centro</option>
+            <option value="top center">Topo</option>
+            <option value="bottom center">Baixo</option>
+            <option value="center left">Esquerda</option>
+            <option value="center right">Direita</option>
+          </select>
+        </label>
+      </div>
+
+      <div class="section">
+        <h4>Ícone do app</h4>
+        <label class="row">
+          <span class="muted">URL</span>
+          <input id="t_iconUrl" class="input" placeholder="https://..." />
+        </label>
+        <div class="row gap">
+          <label class="btn filebtn ghost" title="Upload de ícone">
+            Upload
+            <input id="t_iconUpload" type="file" accept="image/*" hidden />
+          </label>
+          <button id="btnIconReset" class="btn ghost">Padrão</button>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>Presets</h4>
+        <div class="row gap">
+          <input id="themeName" class="input" placeholder="nome do preset (ex: neon glass)" />
+          <button id="btnSaveTheme" class="btn">Salvar</button>
+          <button id="btnResetTheme" class="btn ghost">Reset</button>
+        </div>
+
+        <div class="section">
+          <h4>Presets salvos</h4>
+          <div id="themePresets" class="presetlist"></div>
+        </div>
       </div>
     </div>
   </div>
