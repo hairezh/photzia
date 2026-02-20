@@ -11,7 +11,7 @@
     <div class="brand">
       <span class="logo">◼︎</span>
       <strong>Photzia</strong>
-      <span class="muted">v2</span>
+      <span class="muted">v3</span>
     </div>
 
     <div class="topbar-actions">
@@ -58,7 +58,8 @@
       <div class="toolgrid" id="toolgrid">
         <button class="tool active" data-tool="brush" title="Pincel (B)">🖌️</button>
         <button class="tool" data-tool="eraser" title="Borracha (E)">🧽</button>
-        <button class="tool" data-tool="move" title="Mover (V)">🧲</button>
+        <button class="tool" data-tool="move" title="Mover layer (V)">🧲</button>
+        <button class="tool" data-tool="select" title="Seleção retangular (M)">▭</button>
       </div>
 
       <div class="section">
@@ -82,11 +83,23 @@
       </div>
 
       <div class="section">
+        <h4>Seleção & Transform</h4>
+        <div class="kbdlist muted">
+          <div><span class="kbd">M</span> seleção retangular</div>
+          <div><span class="kbd">Esc</span> deselecionar</div>
+          <div><span class="kbd">Enter</span> aplicar transformação</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> copiar</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">X</span> recortar</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">V</span> colar</div>
+        </div>
+      </div>
+
+      <div class="section">
         <h4>Atalhos</h4>
         <div class="kbdlist muted">
           <div><span class="kbd">B</span> pincel</div>
           <div><span class="kbd">E</span> borracha</div>
-          <div><span class="kbd">V</span> mover</div>
+          <div><span class="kbd">V</span> mover layer</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undo</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> redo</div>
           <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">Z</span> redo</div>
@@ -136,6 +149,33 @@
           <div class="row gap">
             <button id="btnClearLayer" class="btn ghost">Limpar layer</button>
             <button id="btnDeleteLayer" class="btn ghost danger">Deletar layer</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="section">
+        <h4>Seleção</h4>
+        <div id="selEmpty" class="muted">Nenhuma seleção ativa.</div>
+
+        <div id="selProps" hidden>
+          <div class="row">
+            <span class="muted">W×H</span>
+            <span id="selWH" class="pill">0×0</span>
+          </div>
+          <div class="row">
+            <span class="muted">X,Y</span>
+            <span id="selXY" class="pill">0,0</span>
+          </div>
+
+          <div class="row gap">
+            <button id="btnSelCommit" class="btn">Aplicar (Enter)</button>
+            <button id="btnSelCancel" class="btn ghost">Cancelar (Esc)</button>
+          </div>
+
+          <div class="row gap">
+            <button id="btnSelCopy" class="btn ghost">Copiar</button>
+            <button id="btnSelCut" class="btn ghost">Recortar</button>
+            <button id="btnSelPaste" class="btn ghost">Colar</button>
           </div>
         </div>
       </div>
