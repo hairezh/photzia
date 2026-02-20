@@ -7,6 +7,17 @@
   --accent:#7c3aed;
   --border:#243041;
   --canvas:#0a0a0a;
+
+  /* aparência customizável */
+  --ui-blur: 10px;
+  --panel-alpha: 0.92;
+  --topbar-alpha: 0.78;
+
+  --bg-image: none; /* url("...") */
+  --bg-image-alpha: 0.35;
+  --bg-image-fit: cover; /* cover | contain | auto */
+  --bg-image-pos: center center;
+
   --shadow: 0 10px 30px rgba(0,0,0,.35);
 
   --radius: 14px;
@@ -18,13 +29,43 @@
 
 *{ box-sizing:border-box; }
 html,body{ height:100%; }
+
 body{
   margin:0;
   font-family: var(--font);
-  background: radial-gradient(1200px 800px at 20% 0%, rgba(124,58,237,.18), transparent 55%),
-              radial-gradient(900px 600px at 90% 20%, rgba(56,189,248,.12), transparent 55%),
-              var(--bg);
   color: var(--text);
+
+  /* base + gradientes */
+  background:
+    radial-gradient(1200px 800px at 20% 0%, rgba(124,58,237,.18), transparent 55%),
+    radial-gradient(900px 600px at 90% 20%, rgba(56,189,248,.12), transparent 55%),
+    var(--bg);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Background imagem (camada separada) */
+body::before{
+  content:"";
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  background-image: var(--bg-image);
+  background-repeat: no-repeat;
+  background-position: var(--bg-image-pos);
+  background-size: var(--bg-image-fit);
+  opacity: var(--bg-image-alpha);
+  filter: saturate(1.05) contrast(1.02);
+  transform: scale(1.02);
+}
+
+/* Um leve “véu” pra juntar tudo */
+body::after{
+  content:"";
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0,0,0,.15);
 }
 
 code{ color: var(--accent); }
@@ -38,22 +79,21 @@ code{ color: var(--accent); }
   justify-content:space-between;
   padding: 10px 14px;
   border-bottom: 1px solid var(--border);
-  background: rgba(10,15,20,.75);
-  backdrop-filter: blur(10px);
+  background: rgba(10,15,20, var(--topbar-alpha));
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 .brand{
   display:flex;
   gap:10px;
-  align-items:baseline;
+  align-items:center;
 }
-.logo{
-  display:inline-grid;
-  place-items:center;
-  width:26px; height:26px;
-  border-radius: 8px;
-  background: var(--accent);
-  color:white;
+.appicon{
+  width: 28px;
+  height: 28px;
+  border-radius: 10px;
+  object-fit: cover;
+  border: 1px solid rgba(255,255,255,.12);
   box-shadow: var(--shadow);
 }
 .muted{ color: var(--muted); }
@@ -80,12 +120,13 @@ code{ color: var(--accent); }
 }
 
 .panel{
-  background: linear-gradient(180deg, rgba(255,255,255,.03), transparent 40%), var(--panel);
+  background: rgba(17, 24, 39, var(--panel-alpha));
   border: 1px solid var(--border);
   border-radius: var(--radius2);
   padding: 12px;
   box-shadow: var(--shadow);
   overflow:auto;
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 .panel h3{
@@ -117,10 +158,11 @@ code{ color: var(--accent); }
   height: 46px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.88);
   color: var(--text);
   cursor:pointer;
   font-size: 18px;
+  backdrop-filter: blur(var(--ui-blur));
 }
 .tool.active{
   outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent);
@@ -138,12 +180,13 @@ code{ color: var(--accent); }
 
 .btn{
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.82);
   color: var(--text);
   padding: 10px 12px;
   border-radius: 14px;
   cursor:pointer;
   user-select:none;
+  backdrop-filter: blur(var(--ui-blur));
 }
 .btn:hover{
   border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
@@ -166,6 +209,8 @@ code{ color: var(--accent); }
   border-radius: 999px;
   font-size: 12px;
   color: var(--muted);
+  background: rgba(15, 23, 42, 0.35);
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 .input{
@@ -173,16 +218,19 @@ code{ color: var(--accent); }
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.70);
   color: var(--text);
+  backdrop-filter: blur(var(--ui-blur));
 }
+
 .select{
   width: 100%;
   padding: 10px 12px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.70);
   color: var(--text);
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 .kbd{
@@ -190,10 +238,11 @@ code{ color: var(--accent); }
   padding: 2px 8px;
   border-radius: 8px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.65);
   color: var(--text);
   font-size: 12px;
   margin-right: 6px;
+  backdrop-filter: blur(var(--ui-blur));
 }
 .kbdlist{ display:grid; gap:8px; }
 
@@ -208,11 +257,12 @@ code{ color: var(--accent); }
   height: 100%;
   border-radius: var(--radius2);
   border: 1px solid var(--border);
-  background: var(--canvas);
+  background: rgba(10,10,10,0.70);
   box-shadow: var(--shadow);
   display:grid;
   place-items:center;
   position: relative;
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 canvas#view{
@@ -234,8 +284,9 @@ canvas#view{
   padding: 10px;
   border-radius: 14px;
   border: 1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.70);
   cursor:pointer;
+  backdrop-filter: blur(var(--ui-blur));
 }
 .layer.active{
   border-color: color-mix(in srgb, var(--accent) 60%, var(--border));
@@ -266,7 +317,7 @@ canvas#view{
   position: fixed;
   inset:0;
   background: rgba(0,0,0,.55);
-  backdrop-filter: blur(6px);
+  backdrop-filter: blur(var(--ui-blur));
   z-index: 50;
 }
 
@@ -275,12 +326,13 @@ canvas#view{
   left: 50%;
   top: 50%;
   transform: translate(-50%,-50%);
-  width: min(680px, calc(100% - 24px));
+  width: min(740px, calc(100% - 24px));
   border-radius: 18px;
   border: 1px solid var(--border);
-  background: linear-gradient(180deg, rgba(255,255,255,.04), transparent 45%), var(--panel);
+  background: rgba(17, 24, 39, var(--panel-alpha));
   box-shadow: var(--shadow);
   z-index: 60;
+  backdrop-filter: blur(var(--ui-blur));
 }
 
 .modal-header{
@@ -318,9 +370,10 @@ canvas#view{
   align-items:center;
   gap:8px;
   border:1px solid var(--border);
-  background: var(--panel2);
+  background: rgba(15, 23, 42, 0.70);
   border-radius: 999px;
   padding: 8px 10px;
+  backdrop-filter: blur(var(--ui-blur));
 }
 .preset button{
   border:1px solid var(--border);
