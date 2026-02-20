@@ -11,11 +11,30 @@
     <div class="brand">
       <span class="logo">◼︎</span>
       <strong>Photzia</strong>
-      <span class="muted">beta</span>
+      <span class="muted">v2</span>
     </div>
 
     <div class="topbar-actions">
       <button id="btnNewLayer" class="btn">+ Layer</button>
+
+      <label class="btn filebtn" title="Importar imagem como layer">
+        Importar imagem
+        <input id="fileImportImage" type="file" accept="image/*" hidden />
+      </label>
+
+      <button id="btnSaveProject" class="btn">Salvar projeto</button>
+      <label class="btn filebtn" title="Abrir projeto Photzia">
+        Abrir projeto
+        <input id="fileOpenProject" type="file" accept=".json,application/json" hidden />
+      </label>
+
+      <div class="sep"></div>
+
+      <button id="btnUndo" class="btn ghost" title="Ctrl+Z">↶ Undo</button>
+      <button id="btnRedo" class="btn ghost" title="Ctrl+Y / Ctrl+Shift+Z">↷ Redo</button>
+
+      <div class="sep"></div>
+
       <button id="btnExport" class="btn">Export PNG</button>
 
       <div class="sep"></div>
@@ -46,7 +65,7 @@
         <h4>Brush</h4>
         <label class="row">
           <span class="muted">Tamanho</span>
-          <input id="size" type="range" min="1" max="80" value="12" />
+          <input id="size" type="range" min="1" max="120" value="12" />
           <span id="sizeLabel" class="pill">12</span>
         </label>
 
@@ -68,7 +87,9 @@
           <div><span class="kbd">B</span> pincel</div>
           <div><span class="kbd">E</span> borracha</div>
           <div><span class="kbd">V</span> mover</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> desfazer (em breve)</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undo</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> redo</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">Z</span> redo</div>
         </div>
       </div>
     </aside>
@@ -82,6 +103,42 @@
     <aside class="panel right">
       <h3>Camadas</h3>
       <div class="layers" id="layers"></div>
+
+      <div class="section">
+        <h4>Camada ativa</h4>
+
+        <div id="noActiveLayer" class="muted">Nenhuma camada selecionada.</div>
+
+        <div id="activeLayerProps" hidden>
+          <label class="row">
+            <span class="muted">Nome</span>
+            <input id="layerName" class="input" />
+          </label>
+
+          <label class="row">
+            <span class="muted">Opacidade</span>
+            <input id="layerOpacity" type="range" min="0" max="100" value="100" />
+            <span id="layerOpacityLabel" class="pill">100%</span>
+          </label>
+
+          <label class="row">
+            <span class="muted">Blend</span>
+            <select id="layerBlend" class="select">
+              <option value="source-over">Normal</option>
+              <option value="multiply">Multiply</option>
+              <option value="screen">Screen</option>
+              <option value="overlay">Overlay</option>
+              <option value="darken">Darken</option>
+              <option value="lighten">Lighten</option>
+            </select>
+          </label>
+
+          <div class="row gap">
+            <button id="btnClearLayer" class="btn ghost">Limpar layer</button>
+            <button id="btnDeleteLayer" class="btn ghost danger">Deletar layer</button>
+          </div>
+        </div>
+      </div>
     </aside>
   </main>
 
@@ -97,30 +154,12 @@
       <p class="muted">Tudo aqui vira <code>CSS variables</code>. Você pode salvar presets.</p>
 
       <div class="themegrid">
-        <label>
-          <span>Fundo</span>
-          <input type="color" id="t_bg" />
-        </label>
-        <label>
-          <span>Painéis</span>
-          <input type="color" id="t_panel" />
-        </label>
-        <label>
-          <span>Texto</span>
-          <input type="color" id="t_text" />
-        </label>
-        <label>
-          <span>Destaque</span>
-          <input type="color" id="t_accent" />
-        </label>
-        <label>
-          <span>Borda</span>
-          <input type="color" id="t_border" />
-        </label>
-        <label>
-          <span>Canvas</span>
-          <input type="color" id="t_canvas" />
-        </label>
+        <label><span>Fundo</span><input type="color" id="t_bg" /></label>
+        <label><span>Painéis</span><input type="color" id="t_panel" /></label>
+        <label><span>Texto</span><input type="color" id="t_text" /></label>
+        <label><span>Destaque</span><input type="color" id="t_accent" /></label>
+        <label><span>Borda</span><input type="color" id="t_border" /></label>
+        <label><span>Canvas</span><input type="color" id="t_canvas" /></label>
       </div>
 
       <div class="row gap">
