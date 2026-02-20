@@ -1,7 +1,9 @@
-// Photzia v3 — Seleção (marquee) + Transform (move/scale), Copy/Cut/Paste, Commit/Cancel.
+// Photzia v4 — Marching ants + Rotation handle + Full Appearance (blur/transparency/bg image/icon)
 
 const view = document.getElementById("view");
 const vctx = view.getContext("2d");
+
+const appIcon = document.getElementById("appIcon");
 
 const layersEl = document.getElementById("layers");
 
@@ -40,13 +42,14 @@ const selEmpty = document.getElementById("selEmpty");
 const selProps = document.getElementById("selProps");
 const selWH = document.getElementById("selWH");
 const selXY = document.getElementById("selXY");
+const selRot = document.getElementById("selRot");
 const btnSelCommit = document.getElementById("btnSelCommit");
 const btnSelCancel = document.getElementById("btnSelCancel");
 const btnSelCopy = document.getElementById("btnSelCopy");
 const btnSelCut = document.getElementById("btnSelCut");
 const btnSelPaste = document.getElementById("btnSelPaste");
 
-// Theme modal
+// Appearance modal
 const btnTheme = document.getElementById("btnTheme");
 const themeModal = document.getElementById("themeModal");
 const themeModalBackdrop = document.getElementById("themeModalBackdrop");
@@ -63,6 +66,28 @@ const t_accent = document.getElementById("t_accent");
 const t_border = document.getElementById("t_border");
 const t_canvas = document.getElementById("t_canvas");
 
+const t_blur = document.getElementById("t_blur");
+const t_blurLabel = document.getElementById("t_blurLabel");
+const t_panelAlpha = document.getElementById("t_panelAlpha");
+const t_panelAlphaLabel = document.getElementById("t_panelAlphaLabel");
+const t_topbarAlpha = document.getElementById("t_topbarAlpha");
+const t_topbarAlphaLabel = document.getElementById("t_topbarAlphaLabel");
+
+const t_bgImageUrl = document.getElementById("t_bgImageUrl");
+const t_bgImageUpload = document.getElementById("t_bgImageUpload");
+const btnBgClear = document.getElementById("btnBgClear");
+const t_bgImageAlpha = document.getElementById("t_bgImageAlpha");
+const t_bgImageAlphaLabel = document.getElementById("t_bgImageAlphaLabel");
+const t_bgImageFit = document.getElementById("t_bgImageFit");
+const t_bgImagePos = document.getElementById("t_bgImagePos");
+
+const t_iconUrl = document.getElementById("t_iconUrl");
+const t_iconUpload = document.getElementById("t_iconUpload");
+const btnIconReset = document.getElementById("btnIconReset");
+
+const DEFAULT_ICON =
+  "https://i.pinimg.com/1200x/46/22/a5/4622a5352569a33762c60f091485936b.jpg";
+
 const DEFAULT_THEME = {
   "--bg": "#0b0f14",
   "--panel": "#111827",
@@ -72,22 +97,29 @@ const DEFAULT_THEME = {
   "--accent": "#7c3aed",
   "--border": "#243041",
   "--canvas": "#0a0a0a",
+
+  "--ui-blur": "10px",
+  "--panel-alpha": "0.92",
+  "--topbar-alpha": "0.78",
+
+  "--bg-image": "none",
+  "--bg-image-alpha": "0.35",
+  "--bg-image-fit": "cover",
+  "--bg-image-pos": "center center",
+
+  "__icon": DEFAULT_ICON, // não é CSS var, mas vai junto no preset
 };
 
-function applyTheme(themeObj){
-  for (const [k,v] of Object.entries(themeObj)){
-    document.documentElement.style.setProperty(k, v);
+function applyVars(vars){
+  for (const [k,v] of Object.entries(vars)){
+    if (k.startsWith("--")) document.documentElement.style.setProperty(k, v);
   }
-  t_bg.value = cssToHex(getCss("--bg"));
-  t_panel.value = cssToHex(getCss("--panel"));
-  t_text.value = cssToHex(getCss("--text"));
-  t_accent.value = cssToHex(getCss("--accent"));
-  t_border.value = cssToHex(getCss("--border"));
-  t_canvas.value = cssToHex(getCss("--canvas"));
 }
+
 function getCss(varName){
   return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
 }
+
 function cssToHex(c){
   if (!c) return "#000000";
   if (c.startsWith("#")) return c;
@@ -96,23 +128,121 @@ function cssToHex(c){
   const [r,g,b] = m.slice(1).map(n => parseInt(n,10));
   return "#" + [r,g,b].map(x => x.toString(16).padStart(2,"0")).join("");
 }
+
+function setIcon(url){
+  if (!url) return;
+  appIcon.src = url;
+  localStorage.setItem("photzia_icon_url", url);
+}
+
+function getIcon(){
+  return localStorage.getItem("photzia_icon_url") || DEFAULT_ICON;
+}
+
+function applyThemeObj(themeObj){
+  applyVars(themeObj);
+
+  // sync inputs cores
+  t_bg.value = cssToHex(getCss("--bg"));
+  t_panel.value = cssToHex(getCss("--panel"));
+  t_text.value = cssToHex(getCss("--text"));
+  t_accent.value = cssToHex(getCss("--accent"));
+  t_border.value = cssToHex(getCss("--border"));
+  t_canvas.value = cssToHex(getCss("--canvas"));
+
+  // blur / alpha
+  const blurPx = parseInt(getCss("--ui-blur"), 10) || 0;
+  t_blur.value = String(blurPx);
+  t_blurLabel.textContent = `${blurPx}px`;
+
+  const pA = Math.round((parseFloat(getCss("--panel-alpha")) || 0.92) * 100);
+  t_panelAlpha.value = String(pA);
+  t_panelAlphaLabel.textContent = `${pA}%`;
+
+  const tA = Math.round((parseFloat(getCss("--topbar-alpha")) || 0.78) * 100);
+  t_topbarAlpha.value = String(tA);
+  t_topbarAlphaLabel.textContent = `${tA}%`;
+
+  // bg image
+  const bgImg = getCss("--bg-image");
+  t_bgImageUrl.value = bgImg.startsWith("url(") ? bgImg.slice(4, -1).replace(/(^"|"$)/g,"") : "";
+  const bgA = Math.round((parseFloat(getCss("--bg-image-alpha")) || 0) * 100);
+  t_bgImageAlpha.value = String(bgA);
+  t_bgImageAlphaLabel.textContent = `${bgA}%`;
+
+  t_bgImageFit.value = getCss("--bg-image-fit") || "cover";
+  t_bgImagePos.value = getCss("--bg-image-pos") || "center center";
+
+  // icon
+  t_iconUrl.value = getIcon();
+  appIcon.src = getIcon();
+}
+
+function currentThemeObj(){
+  // lê dos inputs (fonte da verdade do modal)
+  const blur = `${parseInt(t_blur.value, 10) || 0}px`;
+  const pA = (parseInt(t_panelAlpha.value, 10) || 92) / 100;
+  const tA = (parseInt(t_topbarAlpha.value, 10) || 78) / 100;
+
+  const bgAlpha = (parseInt(t_bgImageAlpha.value, 10) || 0) / 100;
+  const fit = t_bgImageFit.value || "cover";
+  const pos = t_bgImagePos.value || "center center";
+
+  let bgImage = "none";
+  const url = (t_bgImageUrl.value || "").trim();
+  if (url) bgImage = `url("${url}")`;
+
+  return {
+    "--bg": t_bg.value,
+    "--panel": t_panel.value,
+    "--text": t_text.value,
+    "--accent": t_accent.value,
+    "--border": t_border.value,
+    "--canvas": t_canvas.value,
+
+    "--ui-blur": blur,
+    "--panel-alpha": String(pA),
+    "--topbar-alpha": String(tA),
+
+    "--bg-image": bgImage,
+    "--bg-image-alpha": String(bgAlpha),
+    "--bg-image-fit": fit,
+    "--bg-image-pos": pos,
+
+    "__icon": (t_iconUrl.value || "").trim() || DEFAULT_ICON,
+  };
+}
+
 function openTheme(){
   themeModal.hidden = false;
   themeModalBackdrop.hidden = false;
-  applyTheme({
+  applyThemeObj({
     "--bg": getCss("--bg"),
     "--panel": getCss("--panel"),
     "--text": getCss("--text"),
     "--accent": getCss("--accent"),
     "--border": getCss("--border"),
     "--canvas": getCss("--canvas"),
+
+    "--ui-blur": getCss("--ui-blur"),
+    "--panel-alpha": getCss("--panel-alpha"),
+    "--topbar-alpha": getCss("--topbar-alpha"),
+
+    "--bg-image": getCss("--bg-image"),
+    "--bg-image-alpha": getCss("--bg-image-alpha"),
+    "--bg-image-fit": getCss("--bg-image-fit"),
+    "--bg-image-pos": getCss("--bg-image-pos"),
+
+    "__icon": getIcon(),
   });
   renderPresets();
 }
+
 function closeTheme(){
   themeModal.hidden = true;
   themeModalBackdrop.hidden = true;
 }
+
 btnTheme.addEventListener("click", openTheme);
 btnCloseTheme.addEventListener("click", closeTheme);
 themeModalBackdrop.addEventListener("click", closeTheme);
@@ -123,32 +253,7 @@ function getPresets(){
 function setPresets(p){
   localStorage.setItem("photzia_theme_presets", JSON.stringify(p));
 }
-function currentThemeObj(){
-  return {
-    "--bg": t_bg.value,
-    "--panel": t_panel.value,
-    "--text": t_text.value,
-    "--accent": t_accent.value,
-    "--border": t_border.value,
-    "--canvas": t_canvas.value,
-  };
-}
-[t_bg, t_panel, t_text, t_accent, t_border, t_canvas].forEach(inp => {
-  inp.addEventListener("input", () => applyTheme(currentThemeObj()));
-});
-btnSaveTheme.addEventListener("click", () => {
-  const name = (themeName.value || "").trim();
-  if (!name) return;
-  const presets = getPresets();
-  presets[name] = currentThemeObj();
-  setPresets(presets);
-  renderPresets();
-  themeName.value = "";
-});
-btnResetTheme.addEventListener("click", () => {
-  applyTheme(DEFAULT_THEME);
-  renderPresets();
-});
+
 function renderPresets(){
   const presets = getPresets();
   themePresetsEl.innerHTML = "";
@@ -169,7 +274,11 @@ function renderPresets(){
 
     const btnLoad = document.createElement("button");
     btnLoad.textContent = "Carregar";
-    btnLoad.addEventListener("click", () => applyTheme(presets[name]));
+    btnLoad.addEventListener("click", () => {
+      const preset = presets[name];
+      applyThemeObj(preset);
+      if (preset.__icon) setIcon(preset.__icon);
+    });
 
     const btnDel = document.createElement("button");
     btnDel.textContent = "Apagar";
@@ -187,7 +296,87 @@ function renderPresets(){
   }
 }
 
-// ===== State =====
+// Live update handlers (cores + sliders + selects + bg)
+[t_bg, t_panel, t_text, t_accent, t_border, t_canvas].forEach(inp => {
+  inp.addEventListener("input", () => {
+    const theme = currentThemeObj();
+    applyVars(theme);
+  });
+});
+
+t_blur.addEventListener("input", () => {
+  t_blurLabel.textContent = `${t_blur.value}px`;
+  applyVars(currentThemeObj());
+});
+t_panelAlpha.addEventListener("input", () => {
+  t_panelAlphaLabel.textContent = `${t_panelAlpha.value}%`;
+  applyVars(currentThemeObj());
+});
+t_topbarAlpha.addEventListener("input", () => {
+  t_topbarAlphaLabel.textContent = `${t_topbarAlpha.value}%`;
+  applyVars(currentThemeObj());
+});
+
+t_bgImageUrl.addEventListener("input", () => applyVars(currentThemeObj()));
+t_bgImageAlpha.addEventListener("input", () => {
+  t_bgImageAlphaLabel.textContent = `${t_bgImageAlpha.value}%`;
+  applyVars(currentThemeObj());
+});
+t_bgImageFit.addEventListener("change", () => applyVars(currentThemeObj()));
+t_bgImagePos.addEventListener("change", () => applyVars(currentThemeObj()));
+
+t_bgImageUpload.addEventListener("change", async () => {
+  const file = t_bgImageUpload.files?.[0];
+  t_bgImageUpload.value = "";
+  if (!file) return;
+  const dataUrl = await fileToDataURL(file);
+  t_bgImageUrl.value = dataUrl;
+  applyVars(currentThemeObj());
+});
+
+btnBgClear.addEventListener("click", () => {
+  t_bgImageUrl.value = "";
+  applyVars(currentThemeObj());
+});
+
+t_iconUrl.addEventListener("input", () => {
+  const url = (t_iconUrl.value || "").trim();
+  if (url) setIcon(url);
+});
+
+t_iconUpload.addEventListener("change", async () => {
+  const file = t_iconUpload.files?.[0];
+  t_iconUpload.value = "";
+  if (!file) return;
+  const dataUrl = await fileToDataURL(file);
+  t_iconUrl.value = dataUrl;
+  setIcon(dataUrl);
+});
+
+btnIconReset.addEventListener("click", () => {
+  t_iconUrl.value = DEFAULT_ICON;
+  setIcon(DEFAULT_ICON);
+});
+
+btnSaveTheme.addEventListener("click", () => {
+  const name = (themeName.value || "").trim();
+  if (!name) return;
+
+  const presets = getPresets();
+  const theme = currentThemeObj();
+  presets[name] = theme;
+  setPresets(presets);
+  renderPresets();
+  themeName.value = "";
+});
+
+btnResetTheme.addEventListener("click", () => {
+  applyThemeObj(DEFAULT_THEME);
+  setIcon(DEFAULT_ICON);
+  renderPresets();
+});
+
+// ===== Editor State =====
 const state = {
   tool: "brush",
   brushSize: parseInt(size.value, 10),
@@ -203,30 +392,25 @@ const state = {
 
   moving: { start: null, layerStart: null },
 
-  // selection + transform
   selection: {
     active: false,
-    // selection rect in document(canvas) coords
-    x: 0, y: 0, w: 0, h: 0,
-
-    // floating buffer (pixels)
-    buffer: null, // canvas
-    bufferW: 0,
-    bufferH: 0,
-
-    // transform of buffer
-    tx: 0, ty: 0, // top-left in document coords
-    tw: 0, th: 0, // transformed size
-
-    mode: "idle", // "creating" | "moving" | "scaling"
-    anchor: null, // handle id
-    start: null,  // pointer start info
-    lifted: false, // whether pixels have been removed from layer already
+    x: 0, y: 0, w: 0, h: 0,   // original selection rect
+    tx: 0, ty: 0, tw: 0, th: 0, // transformed box (axis-aligned box)
+    angle: 0,                  // radians
+    buffer: null,
+    bufferW: 0, bufferH: 0,
+    mode: "idle",              // creating | moving | scaling | rotating | idle
+    anchor: null,
+    start: null,
+    lifted: false,
     changed: false,
   },
 
-  clipboard: null, // { png, w, h } or { canvas }
-  history: { past: [], future: [], max: 40 }
+  clipboard: null,
+
+  history: { past: [], future: [], max: 40 },
+
+  antsOffset: 0,
 };
 
 function makeLayer(name){
@@ -234,7 +418,6 @@ function makeLayer(name){
   c.width = view.width;
   c.height = view.height;
   const ctx = c.getContext("2d");
-
   return {
     id: crypto.randomUUID(),
     name: name || `Layer ${state.layers.length + 1}`,
@@ -252,13 +435,13 @@ function getActiveLayer(){
   return state.layers.find(l => l.id === state.activeLayerId) || null;
 }
 
-// ===== History =====
+// ===== History (snapshots) =====
 function layerToDataURL(layer){
   return layer.canvas.toDataURL("image/png");
 }
 function snapshot(){
   return {
-    version: 3,
+    version: 4,
     w: view.width,
     h: view.height,
     zoom: state.zoom,
@@ -273,30 +456,43 @@ function snapshot(){
       y: l.y,
       png: layerToDataURL(l),
     })),
-    theme: {
-      "--bg": getCss("--bg"),
-      "--panel": getCss("--panel"),
-      "--panel2": getCss("--panel2"),
-      "--text": getCss("--text"),
-      "--muted": getCss("--muted"),
-      "--accent": getCss("--accent"),
-      "--border": getCss("--border"),
-      "--canvas": getCss("--canvas"),
+    appearance: {
+      theme: {
+        "--bg": getCss("--bg"),
+        "--panel": getCss("--panel"),
+        "--panel2": getCss("--panel2"),
+        "--text": getCss("--text"),
+        "--muted": getCss("--muted"),
+        "--accent": getCss("--accent"),
+        "--border": getCss("--border"),
+        "--canvas": getCss("--canvas"),
+        "--ui-blur": getCss("--ui-blur"),
+        "--panel-alpha": getCss("--panel-alpha"),
+        "--topbar-alpha": getCss("--topbar-alpha"),
+        "--bg-image": getCss("--bg-image"),
+        "--bg-image-alpha": getCss("--bg-image-alpha"),
+        "--bg-image-fit": getCss("--bg-image-fit"),
+        "--bg-image-pos": getCss("--bg-image-pos"),
+        "__icon": getIcon(),
+      }
     }
   };
 }
 
 async function restore(snap){
   if (!snap || !snap.layers) return;
-
-  // cancel any selection (avoid half-state)
   cancelSelection(false);
 
   if (snap.w && snap.h){
     view.width = snap.w;
     view.height = snap.h;
   }
-  if (snap.theme) applyTheme(snap.theme);
+
+  const theme = snap.appearance?.theme;
+  if (theme){
+    applyThemeObj(theme);
+    if (theme.__icon) setIcon(theme.__icon);
+  }
 
   state.layers = [];
   for (const L of snap.layers){
@@ -346,6 +542,7 @@ async function redo(){
   await restore(next);
   syncUndoRedoButtons();
 }
+
 function syncUndoRedoButtons(){
   btnUndo.disabled = state.history.past.length <= 1;
   btnRedo.disabled = state.history.future.length === 0;
@@ -383,46 +580,123 @@ function drawComposite(){
   drawSelectionOverlay();
 }
 
+function radToDeg(r){ return r * 180 / Math.PI; }
+
 function drawSelectionOverlay(){
   const sel = state.selection;
   if (!sel.active) return;
 
-  // Selection box is in document coords; just draw on top using same transform.
   vctx.save();
   vctx.globalAlpha = 1;
   vctx.globalCompositeOperation = "source-over";
 
-  // box
-  vctx.setLineDash([6, 4]);
-  vctx.lineWidth = 1 / state.zoom; // keep visually stable
-  vctx.strokeStyle = "rgba(255,255,255,0.9)";
-  vctx.strokeRect(sel.tx, sel.ty, sel.tw, sel.th);
+  // marching ants
+  vctx.setLineDash([6 / state.zoom, 4 / state.zoom]);
+  vctx.lineDashOffset = -state.antsOffset / state.zoom;
+  vctx.lineWidth = 1 / state.zoom;
+  vctx.strokeStyle = "rgba(255,255,255,0.95)";
 
-  // handles (corners)
+  // draw rotated polygon
+  const poly = getRotatedCorners(sel);
+  vctx.beginPath();
+  vctx.moveTo(poly[0].x, poly[0].y);
+  for (let i=1;i<poly.length;i++) vctx.lineTo(poly[i].x, poly[i].y);
+  vctx.closePath();
+  vctx.stroke();
+
+  // handles
   vctx.setLineDash([]);
   const hs = 8 / state.zoom;
-  const handles = getHandles(sel);
+  const handles = getHandlesRotated(sel);
   vctx.fillStyle = "rgba(255,255,255,0.95)";
   vctx.strokeStyle = "rgba(0,0,0,0.55)";
   vctx.lineWidth = 1 / state.zoom;
 
-  for (const h of handles){
+  for (const h of handles.corners){
     vctx.beginPath();
     vctx.rect(h.x - hs/2, h.y - hs/2, hs, hs);
     vctx.fill();
     vctx.stroke();
   }
 
-  // floating buffer preview (if lifted)
+  // rotation handle: a circle above top-center
+  const rh = handles.rotate;
+  const r = 6 / state.zoom;
+  vctx.beginPath();
+  vctx.arc(rh.x, rh.y, r, 0, Math.PI*2);
+  vctx.fill();
+  vctx.stroke();
+
+  // draw floating buffer preview
   if (sel.buffer){
-    vctx.save();
-    vctx.globalAlpha = 0.95;
-    vctx.globalCompositeOperation = "source-over";
-    vctx.drawImage(sel.buffer, sel.tx, sel.ty, sel.tw, sel.th);
-    vctx.restore();
+    drawBufferTransformed(vctx, sel);
   }
 
   vctx.restore();
+}
+
+function drawBufferTransformed(ctx, sel){
+  // draw sel.buffer centered in the selection transform
+  const cx = sel.tx + sel.tw/2;
+  const cy = sel.ty + sel.th/2;
+
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(sel.angle);
+  ctx.globalAlpha = 0.95;
+  ctx.drawImage(
+    sel.buffer,
+    -sel.tw/2, -sel.th/2,
+    sel.tw, sel.th
+  );
+  ctx.restore();
+}
+
+// corners based on current transform box + angle
+function getRotatedCorners(sel){
+  const cx = sel.tx + sel.tw/2;
+  const cy = sel.ty + sel.th/2;
+  const hw = sel.tw/2;
+  const hh = sel.th/2;
+
+  const pts = [
+    {x:-hw, y:-hh}, // nw
+    {x: hw, y:-hh}, // ne
+    {x: hw, y: hh}, // se
+    {x:-hw, y: hh}, // sw
+  ];
+
+  const a = sel.angle;
+  const ca = Math.cos(a), sa = Math.sin(a);
+  return pts.map(p => ({
+    x: cx + p.x*ca - p.y*sa,
+    y: cy + p.x*sa + p.y*ca,
+  }));
+}
+
+function getHandlesRotated(sel){
+  const corners = getRotatedCorners(sel);
+  const topCenter = {
+    x: (corners[0].x + corners[1].x) / 2,
+    y: (corners[0].y + corners[1].y) / 2,
+  };
+  const off = 22 / state.zoom;
+  const a = sel.angle;
+  // move "up" along rotated normal
+  const rotate = {
+    x: topCenter.x + Math.sin(a) * (-off),
+    y: topCenter.y + Math.cos(a) * (-off),
+  };
+  return {
+    corners: [
+      {id:"nw", ...corners[0]},
+      {id:"ne", ...corners[1]},
+      {id:"se", ...corners[2]},
+      {id:"sw", ...corners[3]},
+    ],
+    rotate,
+    center: { x: sel.tx + sel.tw/2, y: sel.ty + sel.th/2 }
+  };
 }
 
 // ===== Pointer coords =====
@@ -454,6 +728,7 @@ function setTool(tool){
     b.classList.toggle("active", b.dataset.tool === tool);
   });
 }
+
 toolgrid.addEventListener("click", (e) => {
   const btn = e.target.closest(".tool");
   if (!btn) return;
@@ -464,7 +739,6 @@ toolgrid.addEventListener("click", (e) => {
 window.addEventListener("keydown", (e) => {
   const ctrl = e.ctrlKey || e.metaKey;
 
-  // tools
   if (!ctrl && !e.altKey){
     if (e.key === "b" || e.key === "B") setTool("brush");
     if (e.key === "e" || e.key === "E") setTool("eraser");
@@ -472,7 +746,6 @@ window.addEventListener("keydown", (e) => {
     if (e.key === "m" || e.key === "M") setTool("select");
   }
 
-  // selection control
   if (e.key === "Escape"){
     if (state.selection.active){
       e.preventDefault();
@@ -485,30 +758,22 @@ window.addEventListener("keydown", (e) => {
   if (e.key === "Enter"){
     if (state.selection.active){
       e.preventDefault();
-      commitSelection();
+      commitSelection(true);
     }
     return;
   }
 
-  // undo/redo
   if (ctrl){
     if ((e.key === "z" || e.key === "Z") && e.shiftKey){
-      e.preventDefault();
-      redo();
-      return;
+      e.preventDefault(); redo(); return;
     }
     if (e.key === "z" || e.key === "Z"){
-      e.preventDefault();
-      undo();
-      return;
+      e.preventDefault(); undo(); return;
     }
     if (e.key === "y" || e.key === "Y"){
-      e.preventDefault();
-      redo();
-      return;
+      e.preventDefault(); redo(); return;
     }
 
-    // clipboard internal
     if (e.key === "c" || e.key === "C"){
       if (state.selection.active){ e.preventDefault(); copySelection(); }
       return;
@@ -518,10 +783,7 @@ window.addEventListener("keydown", (e) => {
       return;
     }
     if (e.key === "v" || e.key === "V"){
-      // paste is allowed even without selection
-      e.preventDefault();
-      pasteClipboard();
-      return;
+      e.preventDefault(); pasteClipboard(); return;
     }
   }
 });
@@ -544,7 +806,7 @@ zoom.addEventListener("input", () => {
   drawComposite();
 });
 
-// ===== Drawing to layer =====
+// ===== Drawing =====
 function strokeTo(layer, from, to, erase=false){
   const ctx = layer.ctx;
   ctx.save();
@@ -568,7 +830,6 @@ function strokeTo(layer, from, to, erase=false){
   ctx.restore();
 }
 
-// gesture commit
 let gestureDidChange = false;
 
 view.addEventListener("pointerdown", (e) => {
@@ -582,17 +843,13 @@ view.addEventListener("pointerdown", (e) => {
   const layer = getActiveLayer();
   if (!layer) return;
 
-  // selection tool
   if (state.tool === "select"){
     pointerDownSelect(pos);
     drawComposite();
     return;
   }
 
-  // if user starts drawing with an active selection, commit it first (like “apply before paint”)
-  if (state.selection.active){
-    commitSelection(false);
-  }
+  if (state.selection.active) commitSelection(false);
 
   if (state.tool === "move"){
     state.moving.start = pos;
@@ -600,7 +857,6 @@ view.addEventListener("pointerdown", (e) => {
     return;
   }
 
-  // dot
   strokeTo(layer, pos, {x: pos.x + 0.01, y: pos.y + 0.01}, state.tool === "eraser");
   gestureDidChange = true;
   drawComposite();
@@ -641,7 +897,6 @@ view.addEventListener("pointerup", () => {
   state.moving.start = null;
   state.moving.layerStart = null;
 
-  // selection tool finalization is handled in pointerUpSelect
   if (state.tool === "select"){
     pointerUpSelect();
     drawComposite();
@@ -654,49 +909,13 @@ view.addEventListener("pointerup", () => {
   }
 });
 
-// ===== Selection core =====
+// ===== Selection + Transform (scale + rotate) =====
 function normalizeRect(x1,y1,x2,y2){
   const x = Math.min(x1,x2);
   const y = Math.min(y1,y2);
   const w = Math.abs(x2-x1);
   const h = Math.abs(y2-y1);
   return {x,y,w,h};
-}
-
-function setSelectionRect(x,y,w,h){
-  const sel = state.selection;
-  sel.active = true;
-  sel.x = x; sel.y = y; sel.w = w; sel.h = h;
-
-  // initial transform matches selection box
-  sel.tx = x; sel.ty = y; sel.tw = w; sel.th = h;
-
-  sel.changed = false;
-  sel.mode = "idle";
-  sel.anchor = null;
-  sel.start = null;
-  sel.lifted = false;
-
-  sel.buffer = null;
-  sel.bufferW = 0;
-  sel.bufferH = 0;
-
-  syncSelectionPanel();
-}
-
-function clearSelectionState(){
-  const sel = state.selection;
-  sel.active = false;
-  sel.x=sel.y=sel.w=sel.h=0;
-  sel.tx=sel.ty=sel.tw=sel.th=0;
-  sel.buffer = null;
-  sel.bufferW = 0; sel.bufferH = 0;
-  sel.mode = "idle";
-  sel.anchor = null;
-  sel.start = null;
-  sel.lifted = false;
-  sel.changed = false;
-  syncSelectionPanel();
 }
 
 function syncSelectionPanel(){
@@ -708,34 +927,23 @@ function syncSelectionPanel(){
 
   selWH.textContent = `${Math.round(sel.tw)}×${Math.round(sel.th)}`;
   selXY.textContent = `${Math.round(sel.tx)},${Math.round(sel.ty)}`;
+  selRot.textContent = `${Math.round(radToDeg(sel.angle))}°`;
 }
 
-// handles: four corners
-function getHandles(sel){
-  const x1 = sel.tx, y1 = sel.ty;
-  const x2 = sel.tx + sel.tw, y2 = sel.ty + sel.th;
-  return [
-    { id:"nw", x:x1, y:y1 },
-    { id:"ne", x:x2, y:y1 },
-    { id:"se", x:x2, y:y2 },
-    { id:"sw", x:x1, y:y2 },
-  ];
-}
-
-function hitTestHandle(pos){
+function clearSelectionState(){
   const sel = state.selection;
-  if (!sel.active) return null;
-  const hs = 10 / state.zoom;
-  for (const h of getHandles(sel)){
-    if (Math.abs(pos.x - h.x) <= hs && Math.abs(pos.y - h.y) <= hs){
-      return h.id;
-    }
-  }
-  return null;
-}
-
-function pointInRect(px,py,x,y,w,h){
-  return px>=x && py>=y && px<=x+w && py<=y+h;
+  sel.active = false;
+  sel.x=sel.y=sel.w=sel.h=0;
+  sel.tx=sel.ty=sel.tw=sel.th=0;
+  sel.angle = 0;
+  sel.buffer = null;
+  sel.bufferW = 0; sel.bufferH = 0;
+  sel.mode = "idle";
+  sel.anchor = null;
+  sel.start = null;
+  sel.lifted = false;
+  sel.changed = false;
+  syncSelectionPanel();
 }
 
 function ensureBufferFromLayer(){
@@ -743,10 +951,8 @@ function ensureBufferFromLayer(){
   const layer = getActiveLayer();
   if (!layer) return false;
 
-  // if already has buffer, ok
   if (sel.buffer) return true;
 
-  // create buffer from pixels in selection area (document coords -> layer coords)
   const bw = Math.max(1, Math.floor(sel.w));
   const bh = Math.max(1, Math.floor(sel.h));
   const buf = document.createElement("canvas");
@@ -754,28 +960,21 @@ function ensureBufferFromLayer(){
   buf.height = bh;
   const bctx = buf.getContext("2d");
 
-  // source area in the layer is (sel.x - layer.x, sel.y - layer.y)
   const sx = Math.floor(sel.x - layer.x);
   const sy = Math.floor(sel.y - layer.y);
-
   bctx.drawImage(layer.canvas, sx, sy, bw, bh, 0, 0, bw, bh);
 
   sel.buffer = buf;
   sel.bufferW = bw;
   sel.bufferH = bh;
-
   return true;
 }
 
 function liftPixelsIfNeeded(){
   const sel = state.selection;
   const layer = getActiveLayer();
-  if (!layer) return;
+  if (!layer || !sel.buffer || sel.lifted) return;
 
-  if (sel.lifted) return;
-  if (!sel.buffer) return;
-
-  // remove pixels from original region (cut-out)
   layer.ctx.save();
   layer.ctx.globalCompositeOperation = "destination-out";
   layer.ctx.fillStyle = "rgba(0,0,0,1)";
@@ -785,47 +984,88 @@ function liftPixelsIfNeeded(){
   sel.lifted = true;
 }
 
+function hitTestHandle(pos){
+  const sel = state.selection;
+  if (!sel.active) return null;
+  const hs = 10 / state.zoom;
+  const handles = getHandlesRotated(sel).corners;
+  for (const h of handles){
+    if (Math.abs(pos.x - h.x) <= hs && Math.abs(pos.y - h.y) <= hs) return h.id;
+  }
+  return null;
+}
+
+function hitTestRotate(pos){
+  const sel = state.selection;
+  if (!sel.active) return false;
+  const h = getHandlesRotated(sel).rotate;
+  const r = 10 / state.zoom;
+  const dx = pos.x - h.x, dy = pos.y - h.y;
+  return (dx*dx + dy*dy) <= r*r;
+}
+
+function pointInRotatedRect(pos, sel){
+  // convert point to selection-local coordinates (unrotate)
+  const cx = sel.tx + sel.tw/2;
+  const cy = sel.ty + sel.th/2;
+
+  const dx = pos.x - cx;
+  const dy = pos.y - cy;
+
+  const ca = Math.cos(-sel.angle);
+  const sa = Math.sin(-sel.angle);
+
+  const lx = dx*ca - dy*sa;
+  const ly = dx*sa + dy*ca;
+
+  return Math.abs(lx) <= sel.tw/2 && Math.abs(ly) <= sel.th/2;
+}
+
 function pointerDownSelect(pos){
   const sel = state.selection;
 
-  // if there is an active selection: allow move/scale
   if (sel.active){
+    if (hitTestRotate(pos)){
+      ensureBufferFromLayer();
+      liftPixelsIfNeeded();
+
+      sel.mode = "rotating";
+      const center = { x: sel.tx + sel.tw/2, y: sel.ty + sel.th/2 };
+      sel.start = {
+        center,
+        baseAngle: sel.angle,
+        startPointerAngle: Math.atan2(pos.y - center.y, pos.x - center.x),
+      };
+      return;
+    }
+
     const handle = hitTestHandle(pos);
     if (handle){
-      // start scaling
       ensureBufferFromLayer();
       liftPixelsIfNeeded();
       sel.mode = "scaling";
       sel.anchor = handle;
-      sel.start = {
-        px: pos.x, py: pos.y,
-        tx: sel.tx, ty: sel.ty, tw: sel.tw, th: sel.th
-      };
+      sel.start = { px: pos.x, py: pos.y, tx: sel.tx, ty: sel.ty, tw: sel.tw, th: sel.th };
       return;
     }
 
-    // inside selection -> move
-    if (pointInRect(pos.x, pos.y, sel.tx, sel.ty, sel.tw, sel.th)){
+    if (pointInRotatedRect(pos, sel)){
       ensureBufferFromLayer();
       liftPixelsIfNeeded();
       sel.mode = "moving";
-      sel.start = {
-        px: pos.x, py: pos.y,
-        tx: sel.tx, ty: sel.ty
-      };
+      sel.start = { px: pos.x, py: pos.y, tx: sel.tx, ty: sel.ty };
       return;
     }
 
-    // click outside -> start a new selection (cancel old without committing)
     cancelSelection(true);
   }
 
-  // start creating
   sel.active = true;
   sel.mode = "creating";
   sel.start = { px: pos.x, py: pos.y };
   sel.x = pos.x; sel.y = pos.y; sel.w = 0; sel.h = 0;
   sel.tx = pos.x; sel.ty = pos.y; sel.tw = 0; sel.th = 0;
+  sel.angle = 0;
   sel.buffer = null;
   sel.lifted = false;
   sel.changed = false;
@@ -840,6 +1080,7 @@ function pointerMoveSelect(pos){
     const r = normalizeRect(sel.start.px, sel.start.py, pos.x, pos.y);
     sel.x = r.x; sel.y = r.y; sel.w = r.w; sel.h = r.h;
     sel.tx = r.x; sel.ty = r.y; sel.tw = r.w; sel.th = r.h;
+    sel.angle = 0;
     syncSelectionPanel();
     return;
   }
@@ -859,9 +1100,6 @@ function pointerMoveSelect(pos){
     const dy = pos.y - sel.start.py;
 
     let { tx, ty, tw, th } = sel.start;
-
-    // scale based on which handle is being dragged
-    // Keep opposite corner fixed.
     const x1 = tx;
     const y1 = ty;
     const x2 = tx + tw;
@@ -876,8 +1114,7 @@ function pointerMoveSelect(pos){
       case "sw": nx1 = x1 + dx; ny2 = y2 + dy; break;
     }
 
-    // prevent flip (minimum size)
-    const minSize = 4;
+    const minSize = 6;
     if (Math.abs(nx2 - nx1) < minSize) nx2 = nx1 + Math.sign(nx2 - nx1 || 1) * minSize;
     if (Math.abs(ny2 - ny1) < minSize) ny2 = ny1 + Math.sign(ny2 - ny1 || 1) * minSize;
 
@@ -890,6 +1127,25 @@ function pointerMoveSelect(pos){
     syncSelectionPanel();
     return;
   }
+
+  if (sel.mode === "rotating"){
+    const c = sel.start.center;
+    const ang = Math.atan2(pos.y - c.y, pos.x - c.x);
+    const delta = ang - sel.start.startPointerAngle;
+
+    // segurar Shift = snap a 15°
+    // (aqui detecta pelo teclado global, simples)
+    if (window.__shiftDown){
+      const snapped = Math.round((sel.start.baseAngle + delta) / (Math.PI/12)) * (Math.PI/12);
+      sel.angle = snapped;
+    } else {
+      sel.angle = sel.start.baseAngle + delta;
+    }
+
+    sel.changed = true;
+    syncSelectionPanel();
+    return;
+  }
 }
 
 function pointerUpSelect(){
@@ -897,7 +1153,6 @@ function pointerUpSelect(){
   if (!sel.active) return;
 
   if (sel.mode === "creating"){
-    // if too small, cancel
     if (sel.w < 2 || sel.h < 2){
       clearSelectionState();
       return;
@@ -905,18 +1160,14 @@ function pointerUpSelect(){
     sel.mode = "idle";
     sel.start = null;
     sel.anchor = null;
-    // do not create buffer yet (lazy)
     syncSelectionPanel();
     return;
   }
 
-  if (sel.mode === "moving" || sel.mode === "scaling"){
-    sel.mode = "idle";
-    sel.start = null;
-    sel.anchor = null;
-    syncSelectionPanel();
-    return;
-  }
+  sel.mode = "idle";
+  sel.start = null;
+  sel.anchor = null;
+  syncSelectionPanel();
 }
 
 function commitSelection(pushHistory=true){
@@ -924,19 +1175,27 @@ function commitSelection(pushHistory=true){
   const layer = getActiveLayer();
   if (!sel.active || !layer) return;
 
-  // if there were no changes and not lifted, just keep selection? We'll end selection without changing.
   if (!sel.buffer){
-    // selection exists but no transform; nothing to apply
     clearSelectionState();
     drawComposite();
     return;
   }
 
-  // Draw buffer back to layer with transformed bounds
+  // draw transformed buffer into layer (rotated around center)
+  const cx = sel.tx + sel.tw/2;
+  const cy = sel.ty + sel.th/2;
+
   layer.ctx.save();
   layer.ctx.globalCompositeOperation = "source-over";
   layer.ctx.globalAlpha = 1;
-  layer.ctx.drawImage(sel.buffer, sel.tx - layer.x, sel.ty - layer.y, sel.tw, sel.th);
+
+  // convert doc coords to layer-local
+  const lx = cx - layer.x;
+  const ly = cy - layer.y;
+
+  layer.ctx.translate(lx, ly);
+  layer.ctx.rotate(sel.angle);
+  layer.ctx.drawImage(sel.buffer, -sel.tw/2, -sel.th/2, sel.tw, sel.th);
   layer.ctx.restore();
 
   clearSelectionState();
@@ -953,33 +1212,31 @@ function cancelSelection(pushHistory){
     return;
   }
 
-  // If we lifted pixels, we must restore them to original place
   if (sel.buffer && sel.lifted && layer){
+    // restore original untransformed pixels to original place
     layer.ctx.save();
     layer.ctx.globalCompositeOperation = "source-over";
     layer.ctx.globalAlpha = 1;
-    // restore original at original selection rect
     layer.ctx.drawImage(sel.buffer, sel.x - layer.x, sel.y - layer.y, sel.w, sel.h);
     layer.ctx.restore();
-
     if (pushHistory) commitHistory();
   }
 
   clearSelectionState();
 }
 
-// ===== Clipboard ops =====
+// shift tracking (for rotation snap)
+window.__shiftDown = false;
+window.addEventListener("keydown", (e) => { if (e.key === "Shift") window.__shiftDown = true; });
+window.addEventListener("keyup", (e) => { if (e.key === "Shift") window.__shiftDown = false; });
+
+// ===== Clipboard =====
 function copySelection(){
   const sel = state.selection;
   if (!sel.active) return;
   if (!ensureBufferFromLayer()) return;
 
-  // store PNG to keep simple and resilient
-  state.clipboard = {
-    png: sel.buffer.toDataURL("image/png"),
-    w: sel.bufferW,
-    h: sel.bufferH,
-  };
+  state.clipboard = { png: sel.buffer.toDataURL("image/png") };
 }
 
 function cutSelection(){
@@ -988,7 +1245,6 @@ function cutSelection(){
   if (!ensureBufferFromLayer()) return;
 
   copySelection();
-  // lift immediately (remove from layer)
   liftPixelsIfNeeded();
   sel.changed = true;
   drawComposite();
@@ -1000,20 +1256,14 @@ async function pasteClipboard(){
   const layer = getActiveLayer();
   if (!layer) return;
 
-  // commit any active selection first
-  if (state.selection.active){
-    commitSelection(false);
-  }
+  if (state.selection.active) commitSelection(false);
 
   const img = await loadImageFromDataURL(state.clipboard.png);
-
-  // create a buffer canvas from clipboard
   const buf = document.createElement("canvas");
   buf.width = img.width;
   buf.height = img.height;
   buf.getContext("2d").drawImage(img, 0, 0);
 
-  // center paste
   const x = Math.round((view.width - img.width) / 2);
   const y = Math.round((view.height - img.height) / 2);
 
@@ -1021,12 +1271,13 @@ async function pasteClipboard(){
   sel.active = true;
   sel.x = x; sel.y = y; sel.w = img.width; sel.h = img.height;
   sel.tx = x; sel.ty = y; sel.tw = img.width; sel.th = img.height;
+  sel.angle = 0;
 
   sel.buffer = buf;
   sel.bufferW = img.width;
   sel.bufferH = img.height;
 
-  sel.lifted = true; // it's a floating paste, not from layer pixels
+  sel.lifted = true;
   sel.changed = true;
   sel.mode = "idle";
   sel.start = null;
@@ -1043,15 +1294,25 @@ btnSelCut.addEventListener("click", () => cutSelection());
 btnSelPaste.addEventListener("click", () => pasteClipboard());
 
 // ===== Layers UI =====
+function shortBlend(b){
+  const map = {
+    "source-over": "N",
+    "multiply": "M",
+    "screen": "S",
+    "overlay": "O",
+    "darken": "D",
+    "lighten": "L",
+  };
+  return map[b] || "?";
+}
+
 function renderLayersUI(){
   layersEl.innerHTML = "";
   for (const layer of state.layers){
     const row = document.createElement("div");
     row.className = "layer" + (layer.id === state.activeLayerId ? " active" : "");
     row.addEventListener("click", () => {
-      // if selection exists, apply before switching (avoids confusion)
       if (state.selection.active) commitSelection(false);
-
       state.activeLayerId = layer.id;
       renderLayersUI();
       syncActiveLayerPanel();
@@ -1087,18 +1348,6 @@ function renderLayersUI(){
   }
 }
 
-function shortBlend(b){
-  const map = {
-    "source-over": "N",
-    "multiply": "M",
-    "screen": "S",
-    "overlay": "O",
-    "darken": "D",
-    "lighten": "L",
-  };
-  return map[b] || "?";
-}
-
 function syncActiveLayerPanel(){
   const layer = getActiveLayer();
   const has = !!layer;
@@ -1120,11 +1369,7 @@ layerName.addEventListener("input", () => {
   layer.name = layerName.value;
   renderLayersUI();
 });
-layerName.addEventListener("change", () => {
-  const layer = getActiveLayer();
-  if (!layer) return;
-  commitHistory();
-});
+layerName.addEventListener("change", () => commitHistory());
 
 layerOpacity.addEventListener("input", () => {
   const layer = getActiveLayer();
@@ -1145,9 +1390,7 @@ layerBlend.addEventListener("change", () => {
 });
 
 btnClearLayer.addEventListener("click", () => {
-  // apply selection first to avoid “sumir”
   if (state.selection.active) commitSelection(false);
-
   const layer = getActiveLayer();
   if (!layer) return;
   layer.ctx.clearRect(0,0,layer.canvas.width, layer.canvas.height);
@@ -1157,7 +1400,6 @@ btnClearLayer.addEventListener("click", () => {
 
 btnDeleteLayer.addEventListener("click", () => {
   if (state.selection.active) commitSelection(false);
-
   const layer = getActiveLayer();
   if (!layer) return;
   const idx = state.layers.findIndex(l => l.id === layer.id);
@@ -1181,7 +1423,6 @@ function addLayer(name){
   drawComposite();
   commitHistory();
 }
-
 btnNewLayer.addEventListener("click", () => addLayer());
 
 btnExport.addEventListener("click", () => {
@@ -1258,12 +1499,8 @@ fileOpenProject.addEventListener("change", async () => {
 
   const text = await file.text();
   let obj;
-  try {
-    obj = JSON.parse(text);
-  } catch {
-    alert("Esse arquivo não parece ser um projeto Photzia válido.");
-    return;
-  }
+  try { obj = JSON.parse(text); }
+  catch { alert("Esse arquivo não parece ser um projeto Photzia válido."); return; }
 
   state.history.past = [];
   state.history.future = [];
@@ -1310,9 +1547,36 @@ function drawPngToLayer(layer, dataUrl){
   });
 }
 
+function fileToDataURL(file){
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onload = () => resolve(fr.result);
+    fr.onerror = reject;
+    fr.readAsDataURL(file);
+  });
+}
+
+// ===== Marching ants animation loop =====
+function tick(){
+  // move ants regardless; only redraw when selection active (cheap)
+  state.antsOffset = (state.antsOffset + 1) % 100000;
+
+  if (state.selection.active){
+    // redraw overlay animation
+    drawComposite();
+  }
+
+  requestAnimationFrame(tick);
+}
+
 // ===== Init =====
 function init(){
-  applyTheme(DEFAULT_THEME);
+  // load icon and last appearance (optional)
+  setIcon(getIcon());
+
+  // apply default theme vars
+  applyThemeObj(DEFAULT_THEME);
+  setIcon(getIcon());
 
   const base = makeLayer("Layer 1");
   state.layers = [base];
@@ -1329,5 +1593,8 @@ function init(){
 
   commitHistory();
   syncUndoRedoButtons();
+
+  requestAnimationFrame(tick);
 }
+
 init();
