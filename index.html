@@ -12,7 +12,7 @@
       <img id="appIcon" class="appicon" alt="Photzia icon"
         src="https://i.pinimg.com/1200x/46/22/a5/4622a5352569a33762c60f091485936b.jpg" />
       <strong>Photzia</strong>
-      <span class="muted">v4</span>
+      <span class="muted">v5</span>
     </div>
 
     <div class="topbar-actions">
@@ -53,6 +53,46 @@
   </header>
 
   <main class="layout">
+    <!-- NOVO: barra lateral de menus -->
+    <aside class="menubar" id="menubar">
+      <button class="mitem active" data-menu="file" title="File">
+        <span class="mico">📄</span><span class="mlabel">File</span>
+      </button>
+      <button class="mitem" data-menu="edit" title="Edit">
+        <span class="mico">✏️</span><span class="mlabel">Edit</span>
+      </button>
+      <button class="mitem" data-menu="image" title="Image">
+        <span class="mico">🖼️</span><span class="mlabel">Image</span>
+      </button>
+      <button class="mitem" data-menu="layer" title="Layer">
+        <span class="mico">🧱</span><span class="mlabel">Layer</span>
+      </button>
+      <button class="mitem" data-menu="select" title="Select">
+        <span class="mico">▭</span><span class="mlabel">Select</span>
+      </button>
+      <button class="mitem" data-menu="filter" title="Filter">
+        <span class="mico">✨</span><span class="mlabel">Filter</span>
+      </button>
+      <button class="mitem" data-menu="view" title="View">
+        <span class="mico">🔍</span><span class="mlabel">View</span>
+      </button>
+      <button class="mitem" data-menu="window" title="Window">
+        <span class="mico">🪟</span><span class="mlabel">Window</span>
+      </button>
+      <button class="mitem" data-menu="help" title="Help">
+        <span class="mico">❓</span><span class="mlabel">Help</span>
+      </button>
+    </aside>
+
+    <!-- NOVO: flyout que abre do lado da menubar -->
+    <div class="menuflyout" id="menuFlyout" hidden>
+      <div class="menuflyout-header">
+        <strong id="menuTitle">Menu</strong>
+        <button class="btn ghost" id="btnCloseFlyout">✕</button>
+      </div>
+      <div class="menuflyout-body" id="menuBody"></div>
+    </div>
+
     <aside class="panel left">
       <h3>Ferramentas</h3>
 
@@ -90,23 +130,9 @@
           <div><span class="kbd">arrastar</span> mover seleção</div>
           <div><span class="kbd">cantos</span> redimensionar</div>
           <div><span class="kbd">handle</span> rotacionar</div>
+          <div><span class="kbd">Shift</span> snap 15°</div>
           <div><span class="kbd">Enter</span> aplicar</div>
           <div><span class="kbd">Esc</span> cancelar</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">C</span> copiar</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">X</span> recortar</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">V</span> colar</div>
-        </div>
-      </div>
-
-      <div class="section">
-        <h4>Atalhos</h4>
-        <div class="kbdlist muted">
-          <div><span class="kbd">B</span> pincel</div>
-          <div><span class="kbd">E</span> borracha</div>
-          <div><span class="kbd">V</span> mover layer</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">Z</span> undo</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">Y</span> redo</div>
-          <div><span class="kbd">Ctrl</span>+<span class="kbd">Shift</span>+<span class="kbd">Z</span> redo</div>
         </div>
       </div>
     </aside>
@@ -190,7 +216,7 @@
     </aside>
   </main>
 
-  <!-- Modal de Aparência -->
+  <!-- Modal de Aparência (igual v4) -->
   <div class="modal-backdrop" id="themeModalBackdrop" hidden></div>
   <div class="modal" id="themeModal" hidden>
     <div class="modal-header">
@@ -307,6 +333,9 @@
       </div>
     </div>
   </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast" hidden></div>
 
   <script src="app.js"></script>
 </body>
