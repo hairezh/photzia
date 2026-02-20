@@ -11,36 +11,50 @@
     <div class="brand">
       <img id="appIcon" class="appicon" alt="Photzia icon"
         src="https://i.pinimg.com/1200x/46/22/a5/4622a5352569a33762c60f091485936b.jpg" />
-      <strong>Photzia</strong>
-      <span class="muted">v5</span>
+      <div class="brandtext">
+        <strong>Photzia</strong>
+        <span class="muted">v6</span>
+      </div>
     </div>
 
     <div class="topbar-actions">
       <button id="btnNewLayer" class="btn">+ Layer</button>
 
       <label class="btn filebtn" title="Importar imagem como layer">
-        Importar imagem
+        Importar
         <input id="fileImportImage" type="file" accept="image/*" hidden />
       </label>
 
-      <button id="btnSaveProject" class="btn">Salvar projeto</button>
-      <label class="btn filebtn" title="Abrir projeto Photzia">
+      <button id="btnSaveProject" class="btn ghost">Salvar projeto</button>
+      <label class="btn filebtn ghost" title="Abrir projeto Photzia">
         Abrir projeto
         <input id="fileOpenProject" type="file" accept=".json,application/json" hidden />
       </label>
 
       <div class="sep"></div>
 
-      <button id="btnUndo" class="btn ghost" title="Ctrl+Z">↶ Undo</button>
-      <button id="btnRedo" class="btn ghost" title="Ctrl+Y / Ctrl+Shift+Z">↷ Redo</button>
+      <button id="btnUndo" class="btn ghost" title="Ctrl+Z">↶</button>
+      <button id="btnRedo" class="btn ghost" title="Ctrl+Y / Ctrl+Shift+Z">↷</button>
 
       <div class="sep"></div>
 
-      <button id="btnExport" class="btn">Export PNG</button>
+      <!-- Export com opções -->
+      <div class="exportwrap">
+        <button id="btnExport" class="btn">Exportar</button>
+        <select id="exportType" class="select compact" title="Formato">
+          <option value="png">PNG</option>
+          <option value="jpeg">JPG</option>
+          <option value="webp">WebP</option>
+        </select>
+        <label class="row tight" title="Qualidade (JPG/WebP)">
+          <input id="exportQuality" type="range" min="40" max="100" value="92" />
+          <span id="exportQualityLabel" class="pill">92%</span>
+        </label>
+      </div>
 
       <div class="sep"></div>
 
-      <label class="row">
+      <label class="row tight">
         <span class="muted">Zoom</span>
         <input id="zoom" type="range" min="25" max="400" value="100" />
         <span id="zoomLabel" class="pill">100%</span>
@@ -53,7 +67,7 @@
   </header>
 
   <main class="layout">
-    <!-- NOVO: barra lateral de menus -->
+    <!-- Barra lateral de menus -->
     <aside class="menubar" id="menubar">
       <button class="mitem active" data-menu="file" title="File">
         <span class="mico">📄</span><span class="mlabel">File</span>
@@ -84,7 +98,7 @@
       </button>
     </aside>
 
-    <!-- NOVO: flyout que abre do lado da menubar -->
+    <!-- Flyout -->
     <div class="menuflyout" id="menuFlyout" hidden>
       <div class="menuflyout-header">
         <strong id="menuTitle">Menu</strong>
@@ -127,18 +141,20 @@
         <h4>Seleção & Transform</h4>
         <div class="kbdlist muted">
           <div><span class="kbd">M</span> seleção retangular</div>
-          <div><span class="kbd">arrastar</span> mover seleção</div>
-          <div><span class="kbd">cantos</span> redimensionar</div>
-          <div><span class="kbd">handle</span> rotacionar</div>
+          <div><span class="kbd">arrastar</span> mover</div>
+          <div><span class="kbd">cantos</span> resize</div>
+          <div><span class="kbd">bolinha</span> rotacionar</div>
           <div><span class="kbd">Shift</span> snap 15°</div>
           <div><span class="kbd">Enter</span> aplicar</div>
           <div><span class="kbd">Esc</span> cancelar</div>
+          <div><span class="kbd">Ctrl</span>+<span class="kbd">C/X/V</span> copiar/recortar/colar</div>
         </div>
       </div>
     </aside>
 
     <section class="stage-wrap">
       <div class="stage" id="stage">
+        <div class="stage-badge muted">Canvas</div>
         <canvas id="view" width="1280" height="720"></canvas>
       </div>
     </section>
@@ -177,8 +193,8 @@
           </label>
 
           <div class="row gap">
-            <button id="btnClearLayer" class="btn ghost">Limpar layer</button>
-            <button id="btnDeleteLayer" class="btn ghost danger">Deletar layer</button>
+            <button id="btnClearLayer" class="btn ghost">Limpar</button>
+            <button id="btnDeleteLayer" class="btn ghost danger">Deletar</button>
           </div>
         </div>
       </div>
@@ -202,8 +218,8 @@
           </div>
 
           <div class="row gap">
-            <button id="btnSelCommit" class="btn">Aplicar (Enter)</button>
-            <button id="btnSelCancel" class="btn ghost">Cancelar (Esc)</button>
+            <button id="btnSelCommit" class="btn">Aplicar</button>
+            <button id="btnSelCancel" class="btn ghost">Cancelar</button>
           </div>
 
           <div class="row gap">
@@ -216,7 +232,7 @@
     </aside>
   </main>
 
-  <!-- Modal de Aparência (igual v4) -->
+  <!-- Modal Aparência -->
   <div class="modal-backdrop" id="themeModalBackdrop" hidden></div>
   <div class="modal" id="themeModal" hidden>
     <div class="modal-header">
@@ -225,7 +241,7 @@
     </div>
 
     <div class="modal-body">
-      <p class="muted">Tudo aqui vira <code>CSS variables</code> e pode ser salvo como preset.</p>
+      <p class="muted">Tudo vira <code>CSS variables</code>. Background por link ou upload.</p>
 
       <div class="section">
         <h4>Cores</h4>
@@ -261,15 +277,14 @@
       </div>
 
       <div class="section">
-        <h4>Background (imagem)</h4>
-
+        <h4>Background (PNG por link ou upload)</h4>
         <label class="row">
           <span class="muted">URL</span>
-          <input id="t_bgImageUrl" class="input" placeholder="https://..." />
+          <input id="t_bgImageUrl" class="input" placeholder="https://.../fundo.png" />
         </label>
 
         <div class="row gap">
-          <label class="btn filebtn ghost" title="Upload de background">
+          <label class="btn filebtn ghost">
             Upload
             <input id="t_bgImageUpload" type="file" accept="image/*" hidden />
           </label>
@@ -310,7 +325,7 @@
           <input id="t_iconUrl" class="input" placeholder="https://..." />
         </label>
         <div class="row gap">
-          <label class="btn filebtn ghost" title="Upload de ícone">
+          <label class="btn filebtn ghost">
             Upload
             <input id="t_iconUpload" type="file" accept="image/*" hidden />
           </label>
@@ -321,7 +336,7 @@
       <div class="section">
         <h4>Presets</h4>
         <div class="row gap">
-          <input id="themeName" class="input" placeholder="nome do preset (ex: neon glass)" />
+          <input id="themeName" class="input" placeholder="nome do preset" />
           <button id="btnSaveTheme" class="btn">Salvar</button>
           <button id="btnResetTheme" class="btn ghost">Reset</button>
         </div>
@@ -334,7 +349,6 @@
     </div>
   </div>
 
-  <!-- Toast -->
   <div class="toast" id="toast" hidden></div>
 
   <script src="app.js"></script>
